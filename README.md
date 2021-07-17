@@ -1,164 +1,69 @@
-# Official Flutter SDK for [Stream Chat](https://getstream.io/chat/)
+# Official Flutter packages for [Stream Chat](https://getstream.io/chat/sdk/flutter/)
 
-<p align="center">
-  <a href="https://getstream.io/tutorials/ios-chat/"><img src="https://i.imgur.com/L4Mj8S2.png" alt="Flutter Chat" width="60%" /></a>
-</p>
+![](https://raw.githubusercontent.com/GetStream/stream-chat-flutter/master/images/sdk_hero_v4.png)
 
-> The official Flutter components for Stream Chat, a service for
-> building chat applications.
-
-[![Pub](https://img.shields.io/pub/v/stream_chat_flutter.svg)](https://pub.dartlang.org/packages/stream_chat_flutter)
-![](https://img.shields.io/badge/platform-flutter%20%7C%20flutter%20web-ff69b4.svg?style=flat-square)
-[![Gitter](https://badges.gitter.im/GetStream/stream-chat-flutter.svg)](https://gitter.im/GetStream/stream-chat-flutter?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
-
-<img align="right" src="https://getstream.imgix.net/images/ios-chat-tutorial/iphone_chat_art@1x.png?auto=format,enhance" width="50%" />
+![CI](https://github.com/GetStream/stream-chat-flutter/workflows/stream_flutter_workflow/badge.svg?branch=master)
+[![melos](https://img.shields.io/badge/maintained%20with-melos-f700ff.svg?style=flat-square)](https://github.com/invertase/melos)
 
 **Quick Links**
 
 - [Register](https://getstream.io/chat/trial/) to get an API key for Stream Chat
-- [Flutter Chat Tutorial](https://getstream.io/chat/flutter/tutorial/) 
+- [Flutter Chat SDK Tutorial](https://getstream.io/chat/flutter/tutorial/)
 - [Chat UI Kit](https://getstream.io/chat/ui-kit/)
+- [Sample apps](https://github.com/GetStream/flutter-samples)
+
+This repository contains code for our [Dart](https://dart.dev/) and [Flutter](https://flutter.dev/) chat clients.
+
+Stream allows developers to rapidly deploy scalable feeds and chat messaging with an industry leading 99.999% uptime SLA guarantee.
+
+## Sample apps and demos 
+Our team maintains a dedicated repository for fully-fledged sample applications and demos. Consider checking out [GetStream/flutter-samples](https://github.com/GetStream/flutter-samples) to learn more or get started by looking at our latest [Stream Chat demo](https://github.com/GetStream/flutter-samples/tree/main/stream_chat_v1). 
+
+## Free for Makers
+
+Stream is free for most side and hobby projects. To qualify your project/company needs to have < 5 team members and < $10k in monthly revenue.
+For complete pricing details visit our [Chat Pricing Page](https://getstream.io/chat/pricing/)
+
+## Structure
+Stream Chat Dart is a monorepo built using [Melos](https://docs.page/invertase/melos). Individual packages can be found in the `packages` directory while configuration and top level commands can be found in `melos.yaml`. 
+
+To get started, run `bootstrap` after cloning the project. 
+
+```shell
+melos bootstrap
+```
+
+## Packages 
+We provide a variety of packages depending on the level of customization you want to achieve.
+
+### [stream_chat](https://github.com/GetStream/stream-chat-flutter/tree/master/packages/stream_chat)
+A pure Dart package that can be used on any Dart project. It provides a low-level client to access the Stream Chat service.
+
+### [stream_chat_persistence](https://github.com/GetStream/stream-chat-flutter/tree/master/packages/stream_chat_persistence)
+This package provides a persistence client for fetching and saving chat data locally. Stream Chat Persistence uses Moor as a disk cache.
+
+### [stream_chat_flutter_core](https://github.com/GetStream/stream-chat-flutter/tree/master/packages/stream_chat_flutter_core)
+This package provides business logic to fetch common things required for integrating Stream Chat into your application. The `core` package allows more customisation and hence provides business logic but no UI components.
+
+### [stream_chat_flutter](https://github.com/GetStream/stream-chat-flutter/tree/master/packages/stream_chat_flutter)
+This library includes both a low-level chat SDK and a set of reusable and customizable UI components.
 
 ## Flutter Chat Tutorial
 
 The best place to start is the [Flutter Chat Tutorial](https://getstream.io/chat/flutter/tutorial/).
 It teaches you how to use this SDK and also shows how to make frequently required changes.
 
-## Example App
+## Example Apps
 
-This repo includes a fully functional example app with setup instructions.
-The example is available under the [example](https://github.com/GetStream/stream-chat-flutter/tree/master/example) folder.
+Every package folder includes a fully functional example with setup instructions.
 
-## Add dependency
+We also provide a set of sample apps created using the Stream Flutter SDK at [this location](https://github.com/GetStream/flutter-samples).
 
-```yaml
-dependencies:
- stream_chat_flutter: ^0.2.1
-```
 
-You should then run `flutter packages get`
+## We are hiring
 
-### Android
+We've recently closed a [\$38 million Series B funding round](https://techcrunch.com/2021/03/04/stream-raises-38m-as-its-chat-and-activity-feed-apis-power-communications-for-1b-users/) and we keep actively growing.
+Our APIs are used by more than a billion end-users, and you'll have a chance to make a huge impact on the product within a team of the strongest engineers all over the world.
 
-All set ✅
+Check out our current openings and apply via [Stream's website](https://getstream.io/team/#jobs).
 
-### iOS
-
-The library uses [flutter file picker plugin](https://github.com/miguelpruivo/flutter_file_picker) to pick
-files from the os.
-Follow [this wiki](https://github.com/miguelpruivo/flutter_file_picker/wiki/Setup#ios) to fulfill iOS requirements.
-
-We also use [video_player](https://pub.dev/packages/video_player) to reproduce videos. Follow [this guide](https://pub.dev/packages/video_player#installation) to fulfill the requirements.
-
-To pick images from the camera, we use the [image_picker](https://pub.dev/packages/image_picker) plugin.
-Follow [these instructions](https://pub.dev/packages/image_picker#ios) to check the requirements.
-
-## Docs
-
-### Business logic components
-
-We provide 3 Widgets dedicated to business logic and state management:
-
-- [StreamChat](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/StreamChat-class.html)
-- [StreamChannel](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/StreamChannel-class.html)
-- [ChannelsBloc](https://pub.dev/documentation/stream_chat_flutter/0.2.0-alpha+2/stream_chat_flutter/ChannelsBloc-class.html)
-
-### UI Components
-
-These are the available Widgets that you can use to build your application UI.
-Every widget uses the `StreamChat` or `StreamChannel` widgets to manage the state and communicate with Stream services.
-
-- [ChannelHeader](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/ChannelHeader-class.html)
-- [ChannelImage](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/ChannelImage-class.html)
-- [ChannelListView](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/ChannelListView-class.html)
-- [ChannelName](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/ChannelName-class.html)
-- [ChannelPreview](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/ChannelPreview-class.html)
-- [MessageInput](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/MessageInput-class.html)
-- [MessageListView](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/MessageListView-class.html)
-- [MessageWidget](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/MessageWidget-class.html)
-- [StreamChatTheme](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/StreamChatTheme-class.html)
-- [ThreadHeader](https://pub.dev/documentation/stream_chat_flutter/latest/stream_chat_flutter/ThreadHeader-class.html)
-- ...
-
-### Customizing styles
-
-The Flutter SDK comes with a fully designed set of widgets that you can customize to fit with your application style and typography.
-Changing the theme of Chat widgets works in a very similar way that `MaterialApp` and `Theme` do.
-
-Out of the box, all chat widgets use their default styling, and there are two ways to change the styling:
-
-  1. Initialize the `StreamChatTheme` from your existing `MaterialApp` style
-  ```dart
-  class MyApp extends StatelessWidget {
-    final Client client;
-
-    MyApp(this.client);
-
-    @override
-    Widget build(BuildContext context) {
-      final theme = ThemeData(
-        primarySwatch: Colors.green,
-      );
-
-      return MaterialApp(
-        theme: theme,
-        builder: (context, child) => StreamChat(
-         child: child,
-         client: client,
-         streamChatThemeData: StreamChatThemeData.fromTheme(theme),
-        ),
-        home: ChannelListPage(),
-        );
-    }
-  }
-  ```
-
-  2. Construct a custom theme and provide all the customizations needed
-  ```dart
-  class MyApp extends StatelessWidget {
-    final Client client;
-
-    MyApp(this.client);
-
-    @override
-    Widget build(BuildContext context) {
-      final theme = ThemeData(
-        primarySwatch: Colors.green,
-      );
-
-      return MaterialApp(
-        theme: theme,
-        builder: (context, child) => StreamChat(
-         child: child,
-         client: client,
-         streamChatThemeData: StreamChatThemeData.fromTheme(theme).copyWith(
-            ownMessageTheme: MessageTheme(
-            messageBackgroundColor: Colors.black,
-            messageText: TextStyle(
-              color: Colors.white,
-            ),
-            avatarTheme: AvatarTheme(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            ),
-         ),
-        ),
-        home: ChannelListPage(),
-        );
-    }
-  }
-  ```
-  
-### Offline storage 
-
-By default the library saves information about channels and messages in a SQLite DB.
-
-Set the property `persistenceEnabled` to false if you don't want to use the offline storage.
-
-## Contributing
-
-We welcome code changes that improve this library or fix a problem,
-please make sure to follow all best practices and add tests if applicable before submitting a Pull Request on Github.
-We are pleased to merge your code into the official repository.
-Make sure to sign our [Contributor License Agreement (CLA)](https://docs.google.com/forms/d/e/1FAIpQLScFKsKkAJI7mhCr7K9rEIOpqIDThrWxuvxnwUq2XkHyG154vQ/viewform) first.
-See our license file for more details.
