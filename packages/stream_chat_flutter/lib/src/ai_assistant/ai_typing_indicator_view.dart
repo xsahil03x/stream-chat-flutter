@@ -17,6 +17,10 @@ import 'package:flutter/material.dart';
 /// see also:
 /// - [AnimatedDots] which is used to display the animated dots.
 /// {@endtemplate}
+@Deprecated(
+  'Moved to package:stream_chat_flutter_ai. '
+  'Will be removed in a future release.',
+)
 class AITypingIndicatorView extends StatelessWidget {
   /// {@macro aiTypingIndicatorView}
   const AITypingIndicatorView({
@@ -79,6 +83,10 @@ class AITypingIndicatorView extends StatelessWidget {
 ///
 /// The widget is typically used to indicate that someone is typing.
 /// {@endtemplate}
+@Deprecated(
+  'Moved to package:stream_chat_flutter_ai. '
+  'Will be removed in a future release.',
+)
 class AnimatedDots extends StatelessWidget {
   /// {@macro animatedDots}
   const AnimatedDots({
@@ -145,25 +153,25 @@ class _AnimatedDot extends StatefulWidget {
   State<_AnimatedDot> createState() => _AnimatedDotState();
 }
 
-class _AnimatedDotState extends State<_AnimatedDot>
-    with SingleTickerProviderStateMixin<_AnimatedDot> {
+class _AnimatedDotState extends State<_AnimatedDot> with SingleTickerProviderStateMixin<_AnimatedDot> {
   late final AnimationController _repeatingController;
 
   @override
   void initState() {
     super.initState();
-    _repeatingController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..addStatusListener(
-        (status) {
-          if (status == AnimationStatus.completed) {
-            if (mounted) _repeatingController.reverse();
-          } else if (status == AnimationStatus.dismissed) {
-            if (mounted) _repeatingController.forward();
-          }
-        },
-      );
+    _repeatingController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 800),
+        )..addStatusListener(
+          (status) {
+            if (status == AnimationStatus.completed) {
+              if (mounted) _repeatingController.reverse();
+            } else if (status == AnimationStatus.dismissed) {
+              if (mounted) _repeatingController.forward();
+            }
+          },
+        );
 
     Future.delayed(
       Duration(milliseconds: 200 * widget.index),

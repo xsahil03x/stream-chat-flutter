@@ -1,7 +1,9 @@
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
-import 'package:sample_app/pages/thread_page.dart';
+import 'package:go_router/go_router.dart';
 import 'package:stream_chat_flutter/stream_chat_flutter.dart';
+
+import '../routes/routes.dart';
+import '../widgets/split_view.dart';
 
 class ThreadListPage extends StatefulWidget {
   const ThreadListPage({super.key});
@@ -23,52 +25,40 @@ class _ThreadListPageState extends State<ThreadListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ValueListenableBuilder(
-          valueListenable: controller.unseenThreadIds,
-          builder: (_, unreadThreads, __) => StreamUnreadThreadsBanner(
-            unreadThreads: unreadThreads,
-            onTap: () => controller
-                .refresh(resetValue: false)
-                .then((_) => controller.clearUnseenThreadIds()),
-          ),
-        ),
-        Expanded(
-          child: StreamThreadListView(
-            controller: controller,
-            onThreadTap: (thread) async {
-              final channelCid = thread.channelCid;
+    final openThreadId = switch (AdaptiveSplitView.isExpandedOf(context)) {
+      true => GoRouterState.of(context).uri.queryParameters['pid'],
+      false => null,
+    };
 
-              final channel = StreamChat.of(context).client.channel(
-                    channelCid.split(':')[0],
-                    id: channelCid.split(':')[1],
-                  );
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: controller.unseenThreadIds,
+      builder: (context, unseenThreadIds, child) => StreamUnreadThreadsBanner(
+        enabled: unseenThreadIds.isNotEmpty,
+        unreadThreads: unseenThreadIds,
+        onRefresh: () async {
+          await controller.refresh(resetValue: false);
+          controller.clearUnseenThreadIds();
+        },
+        child: child,
+      ),
+      child: StreamThreadListView(
+        controller: controller,
+        itemBuilder: (context, threads, index, defaultWidget) {
+          return defaultWidget.copyWith(selected: threads[index].parentMessageId == openThreadId);
+        },
+        onThreadTap: (thread) {
+          final [type, id] = thread.channelCid.split(':');
+          final channel = StreamChat.of(context).client.channel(type, id: id);
 
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) {
-                    return StreamChannel(
-                      channel: channel,
-                      initialMessageId: thread.draft?.parentId,
-                      child: BetterStreamBuilder(
-                        stream: channel.state?.messagesStream.map(
-                          (messages) => messages.firstWhereOrNull(
-                            (m) => m.id == thread.parentMessage?.id,
-                          ),
-                        ),
-                        builder: (_, parentMessage) {
-                          return ThreadPage(parent: parentMessage);
-                        },
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+          GoRouter.of(context).goNamed(
+            Routes.CHANNEL_PAGE.name,
+            pathParameters: Routes.CHANNEL_PAGE.params(channel),
+            queryParameters: {'mid': thread.parentMessageId, 'pid': thread.parentMessageId},
+            // The thread's parent may not be loaded in the channel yet.
+            extra: thread.parentMessage,
+          );
+        },
+      ),
     );
   }
 }

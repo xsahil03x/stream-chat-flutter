@@ -1,6 +1,7 @@
 // coverage:ignore-file
 import 'package:drift/drift.dart';
-import 'package:stream_chat_persistence/src/entity/entity.dart';
+import '../converter/map_converter.dart';
+import 'entity.dart';
 
 /// Represents a [PollVotes] table in [DriftChatDatabase].
 @DataClassName('PollVoteEntity')
@@ -9,8 +10,7 @@ class PollVotes extends Table {
   TextColumn get id => text().nullable()();
 
   /// The unique identifier of the poll the vote belongs to.
-  TextColumn get pollId =>
-      text().nullable().references(Polls, #id, onDelete: KeyAction.cascade)();
+  TextColumn get pollId => text().nullable().references(Polls, #id, onDelete: KeyAction.cascade)();
 
   /// The unique identifier of the option selected in the poll.
   ///
@@ -21,6 +21,10 @@ class PollVotes extends Table {
   ///
   /// Nullable if the user selected an option.
   TextColumn get answerText => text().nullable()();
+
+  /// The translations of [answerText], keyed as `<language>_text`, plus the
+  /// `language` it was written in.
+  TextColumn get answerTextI18n => text().nullable().map(NullableMapConverter<String>())();
 
   /// The date when the poll vote was created.
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();

@@ -6,6 +6,10 @@ import 'package:flutter/widgets.dart';
 /// {@template typewriterState}
 /// The current typing state of a typewriter.
 /// {@endtemplate}
+@Deprecated(
+  'Moved to package:stream_chat_flutter_ai. '
+  'Will be removed in a future release.',
+)
 enum TypewriterState {
   /// The typewriter is not typing.
   idle,
@@ -26,6 +30,10 @@ enum TypewriterState {
 /// The [text] field holds the current text that has been typed out. The [state]
 /// field holds the current typing state of the typewriter.
 /// {@endtemplate}
+@Deprecated(
+  'Moved to package:stream_chat_flutter_ai. '
+  'Will be removed in a future release.',
+)
 class TypewriterValue {
   /// {@macro typewriterValue}
   const TypewriterValue({
@@ -54,9 +62,7 @@ class TypewriterValue {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is TypewriterValue &&
-        other.text == text &&
-        other.state == state;
+    return other is TypewriterValue && other.text == text && other.state == state;
   }
 
   @override
@@ -99,6 +105,10 @@ class TypewriterValue {
 /// controller.updateText('Hello, Flutter!');
 /// ```
 /// {@endtemplate}
+@Deprecated(
+  'Moved to package:stream_chat_flutter_ai. '
+  'Will be removed in a future release.',
+)
 class TypewriterController extends ValueNotifier<TypewriterValue> {
   /// {@macro typewriterController}
   TypewriterController({
@@ -205,17 +215,26 @@ class TypewriterController extends ValueNotifier<TypewriterValue> {
 /// A widget builder for a [StreamTypewriterBuilder]. It allows you to build a
 /// widget depending on the [TypewriterValue]'s value.
 /// {@endtemplate}
-typedef TypewriterWidgetBuilder = Widget Function(
-  BuildContext context,
-  TypewriterValue value,
-  Widget? child,
-);
+@Deprecated(
+  'Moved to package:stream_chat_flutter_ai. '
+  'Will be removed in a future release.',
+)
+typedef TypewriterWidgetBuilder =
+    Widget Function(
+      BuildContext context,
+      TypewriterValue value,
+      Widget? child,
+    );
 
 /// {@template streamTypewriterBuilder}
 /// A widget that listens to a [TypewriterController] and rebuilds whenever the
 /// value changes. It allows you to build a widget depending on the controller's
 /// value.
 /// {@endtemplate}
+@Deprecated(
+  'Moved to package:stream_chat_flutter_ai and renamed to TypewriterBuilder. '
+  'Will be removed in a future release.',
+)
 class StreamTypewriterBuilder extends StatelessWidget {
   /// {@macro streamTypewriterBuilder}
   const StreamTypewriterBuilder({

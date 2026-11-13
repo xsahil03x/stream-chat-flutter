@@ -5,10 +5,11 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
-import 'package:stream_chat_flutter/src/audio/audio_sampling.dart' as sampling;
-import 'package:stream_chat_flutter/src/message_input/audio_recorder/audio_recorder_state.dart';
-import 'package:stream_chat_flutter/src/utils/extensions.dart';
 import 'package:stream_chat_flutter_core/stream_chat_flutter_core.dart';
+
+import '../../audio/audio_sampling.dart' as sampling;
+import '../../utils/extensions.dart';
+import 'audio_recorder_state.dart';
 
 /// {@template streamAudioRecorderController}
 /// A controller for recording audio tracks. It provides methods to start,
@@ -18,7 +19,8 @@ import 'package:stream_chat_flutter_core/stream_chat_flutter_core.dart';
 /// to the recorder state changes and updates the [AudioRecorderState]
 /// accordingly.
 /// {@endtemplate}
-class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
+class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState>
+    with DisposeAwareValueNotifier<AudioRecorderState> {
   /// {@macro streamAudioRecorderController}
   factory StreamAudioRecorderController({
     RecordConfig? config,
@@ -30,9 +32,9 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
       config: switch (config) {
         final config? => config,
         _ => const RecordConfig(
-            numChannels: 1,
-            encoder: kIsWeb ? AudioEncoder.wav : AudioEncoder.aacLc,
-          ),
+          numChannels: 1,
+          encoder: kIsWeb ? AudioEncoder.wav : AudioEncoder.aacLc,
+        ),
       },
     );
   }
@@ -41,19 +43,16 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
   @visibleForTesting
   StreamAudioRecorderController.raw({
     required this.config,
-    required AudioRecorder recorder,
+    required this._recorder,
     AudioRecorderState initialState = const RecordStateIdle(),
-    Duration amplitudeInterval = const Duration(milliseconds: 100),
-  })  : _recorder = recorder,
-        super(initialState) {
-    // Listen to the recorder amplitude changes
-    _recorderAmplitudeSubscription = _recorder
-        .onAmplitudeChanged(amplitudeInterval) //
-        .listen(_onRecorderAmplitudeChanged);
-  }
+    this._amplitudeInterval = const Duration(milliseconds: 100),
+  }) : super(initialState);
 
   /// The configuration for the recording session.
   final RecordConfig config;
+
+  final Duration _amplitudeInterval;
+
   final AudioRecorder _recorder;
 
   /// Starts a new recording session.
@@ -61,13 +60,23 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
     // Only start the recorder if it is currently idle.
     if (value case RecordStateIdle()) {
       // Return if the recorder does not have permission to record audio.
-      final hasPermission = await _recorder.hasPermission();
-      if (!hasPermission) return;
+      final hasPermission = await _recorder.hasPermission(request: false);
+      if (!hasPermission) {
+        /// Request permission to record audio.
+        /// User has to start the recording session again to record audio.
+        await _recorder.hasPermission(request: true);
+        return;
+      }
 
       // Start the recording session.
       final tempPath = await _getOutputFilePath(config.encoder);
       await _recorder.start(config, path: tempPath);
       _startDurationTimer();
+      _listenToAmplitude();
+
+      // Reset the per-session flag so a new recording starts in a known state
+      // regardless of how the previous session ended.
+      _wasLastCancelled = false;
 
       // Update the state to recording hold.
       value = const RecordStateRecordingHold();
@@ -87,6 +96,7 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
       // Stop the duration timer.
       _durationTimer?.cancel();
       _durationTimer = null;
+      _stopListeningToAmplitude();
 
       if (path == null) throw Exception('Failed to stop the recorder');
       final fileName = name ?? 'audio.${config.encoder.extension}';
@@ -116,6 +126,7 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
       // Stop the duration timer.
       _durationTimer?.cancel();
       _durationTimer = null;
+      _stopListeningToAmplitude();
 
       if (path == null) throw Exception('Failed to stop the recorder');
       final fileName = name ?? 'audio.${config.encoder.extension}';
@@ -127,6 +138,16 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
     return null;
   }
 
+  /// Whether the most recent transition to [RecordStateIdle] was a user
+  /// cancellation (the recorded track was discarded) rather than a send /
+  /// finalize that kept the track.
+  ///
+  /// Set by [cancelRecord] from its `discardTrack` argument. Read this from a
+  /// state-transition observer when both cancel and send paths land at
+  /// [RecordStateIdle] and need to be distinguished.
+  bool get wasLastCancelled => _wasLastCancelled;
+  bool _wasLastCancelled = false;
+
   /// Cancels the current recording session and discards the recorded track.
   ///
   /// Pass [discardTrack] as `false` to keep the recorded track, This is useful
@@ -136,6 +157,8 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
     // Only cancel the recorder if it is currently recording or stopped.
     if (value case RecordStateRecording() || RecordStateStopped()) {
       if (discardTrack) await _recorder.cancel();
+      _wasLastCancelled = discardTrack;
+      _stopListeningToAmplitude();
 
       // Update the state to idle.
       value = const RecordStateIdle();
@@ -169,6 +192,7 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
   /// Shows an info message to the user for the given [duration].
   ///
   /// This is useful for showing messages like "Hold to record" or "Recording".
+  @Deprecated('Use StreamSnackbar via StreamSnackbarMessenger instead.')
   void showInfo(
     String message, {
     Duration duration = const Duration(seconds: 3),
@@ -193,6 +217,18 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
     }
   }
 
+  /// Cancels any pending info-message timer and clears the message on
+  /// [RecordStateIdle]. Counterpart to [showInfo].
+  @Deprecated('Use StreamSnackbar via StreamSnackbarMessenger instead.')
+  void hideInfo() {
+    // Cancel the info timer.
+    _infoTimer?.cancel();
+    _infoTimer = null;
+
+    // Clear the info message if it is currently being shown.
+    if (value case RecordStateIdle()) value = const RecordStateIdle();
+  }
+
   Future<String> _getOutputFilePath(AudioEncoder encoder) async {
     // Ignored on web platform.
     if (CurrentPlatform.isWeb) return '';
@@ -203,7 +239,20 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
     return '${tempDir.path}/audio_$currentTimestamp.${encoder.extension}';
   }
 
+  // Only listened to while recording: the recorder polls the platform for
+  // the amplitude for as long as anything listens, recording or not.
   StreamSubscription<Amplitude>? _recorderAmplitudeSubscription;
+  void _listenToAmplitude() {
+    _recorderAmplitudeSubscription ??= _recorder
+        .onAmplitudeChanged(_amplitudeInterval)
+        .listen(_onRecorderAmplitudeChanged);
+  }
+
+  void _stopListeningToAmplitude() {
+    _recorderAmplitudeSubscription?.cancel();
+    _recorderAmplitudeSubscription = null;
+  }
+
   void _onRecorderAmplitudeChanged(Amplitude amplitude) {
     // Only update the waveform if the recorder is currently recording.
     if (value case final RecordStateRecording state) {
@@ -227,7 +276,9 @@ class StreamAudioRecorderController extends ValueNotifier<AudioRecorderState> {
   void dispose() {
     _durationTimer?.cancel();
     _durationTimer = null;
-    _recorderAmplitudeSubscription?.cancel();
+    _infoTimer?.cancel();
+    _infoTimer = null;
+    _stopListeningToAmplitude();
     _recorder.dispose();
     super.dispose();
   }

@@ -20,13 +20,21 @@ void main() {
     expect(token, devToken);
   });
 
+  test('`.fromRawValue` should throw if the raw value is not a valid JWT', () {
+    const notAJwt = 'bad-token-without-a-user-id';
+    expect(() => Token.fromRawValue(notAJwt), throwsA(isA<ArgumentError>()));
+  });
+
   test('`.fromRawValue` should throw if does not contain `user_id`', () {
-    const badToken = 'bad-token-without-a-user-id';
-    try {
-      Token.fromRawValue(badToken);
-    } catch (e) {
-      expect(e, isA<ArgumentError>());
-    }
+    // A well-formed JWT whose payload carries no `user_id` claim.
+    const header = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
+    const payload = 'eyJmb28iOiJiYXIifQ';
+    const tokenWithoutUserId = '$header.$payload.devtoken';
+
+    expect(
+      () => Token.fromRawValue(tokenWithoutUserId),
+      throwsA(isA<AssertionError>()),
+    );
   });
 
   test('`.development` should create a dev-token with provided user-id', () {
@@ -43,8 +51,7 @@ void main() {
     '`.guest` should create a guest-token with provided user and provider',
     () async {
       final user = User(id: 'test-user-id');
-      Future<String> provider(User user) async =>
-          Token.development(user.id).rawValue;
+      Future<String> provider(User user) async => Token.development(user.id).rawValue;
 
       final token = await Token.guest(user, provider);
       expect(token, isNotNull);

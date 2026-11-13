@@ -1,8 +1,15 @@
 import 'package:json_annotation/json_annotation.dart';
-import 'package:stream_chat/src/core/util/serializer.dart';
-import 'package:stream_chat/stream_chat.dart';
+
+import '../../../stream_chat.dart';
+import '../util/serializer.dart';
 
 part 'event.g.dart';
+
+// The two spellings of the "checking sources" state. The backend constant is
+// AI_STATE_CHECKING_SOURCES; the reference agents send AI_STATE_EXTERNAL_SOURCES,
+// and the backend relays ai_state verbatim.
+const _kAiStateCheckingSources = 'AI_STATE_CHECKING_SOURCES';
+const _kAiStateExternalSources = 'AI_STATE_EXTERNAL_SOURCES';
 
 /// The class that contains the information about an event
 @JsonSerializable(includeIfNull: false)
@@ -30,6 +37,7 @@ class Event {
     this.channelLastMessageAt,
     this.parentId,
     this.hardDelete,
+    this.deletedForMe,
     this.aiState,
     this.aiMessage,
     this.messageId,
@@ -41,9 +49,12 @@ class Event {
     this.lastReadMessageId,
     this.draft,
     this.reminder,
+    this.scheduledMessage,
     this.pushPreference,
     this.channelPushPreference,
+    this.channelMemberCount,
     this.channelMessageCount,
+    this.watcherCount,
     this.lastDeliveredAt,
     this.lastDeliveredMessageId,
     this.extraData = const {},
@@ -51,11 +62,12 @@ class Event {
   }) : createdAt = createdAt?.toUtc() ?? DateTime.now().toUtc();
 
   /// Create a new instance from a json
-  factory Event.fromJson(Map<String, dynamic> json) =>
-      _$EventFromJson(Serializer.moveToExtraDataFromRoot(
-        json,
-        topLevelFields,
-      ));
+  factory Event.fromJson(Map<String, dynamic> json) => _$EventFromJson(
+    Serializer.moveToExtraDataFromRoot(
+      json,
+      topLevelFields,
+    ),
+  );
 
   /// The type of the event
   /// [EventType] contains some predefined constant types
@@ -125,8 +137,18 @@ class Event {
   /// This is true if the message has been hard deleted
   final bool? hardDelete;
 
+  /// Whether the message was deleted only for the current user.
+  final bool? deletedForMe;
+
+  // Accept both spellings of the "checking sources" state.
+  static Object? _aiStateReadValue(Map<Object?, Object?> json, String key) {
+    final value = json[key];
+    if (value == _kAiStateExternalSources) return _kAiStateCheckingSources;
+    return value;
+  }
+
   /// The current state of the AI assistant.
-  @JsonKey(unknownEnumValue: AITypingState.idle)
+  @JsonKey(readValue: _aiStateReadValue, unknownEnumValue: AITypingState.idle)
   final AITypingState? aiState;
 
   /// Additional message from the AI assistant.
@@ -159,14 +181,34 @@ class Event {
   /// The message reminder sent with the event.
   final MessageReminder? reminder;
 
+  /// The scheduled message this event is about.
+  ///
+  /// On [EventType.scheduledMessageSent], [messageId] is the ID of the sent
+  /// message, when it is known.
+  @JsonKey(includeToJson: false)
+  final ScheduledMessage? scheduledMessage;
+
   /// Push notification preferences for the current user.
   final PushPreference? pushPreference;
 
   /// Push notification preferences for the current user for this channel.
   final ChannelPushPreference? channelPushPreference;
 
+  /// The total number of members in the channel.
+  ///
+  /// Sent with channel events such as `member.added`, `member.removed` and
+  /// `member.updated`, reflecting the authoritative member count after the
+  /// change.
+  final int? channelMemberCount;
+
   /// The total number of messages in the channel.
   final int? channelMessageCount;
+
+  /// The number of users currently watching the channel.
+  ///
+  /// Sent with `user.watching.start`, `user.watching.stop` and `message.new`
+  /// events, reflecting the authoritative watcher count after the change.
+  final int? watcherCount;
 
   /// The date of the last delivered message.
   final DateTime? lastDeliveredAt;
@@ -179,7 +221,7 @@ class Event {
 
   /// Known top level fields.
   /// Useful for [Serializer] methods.
-  static final topLevelFields = [
+  static const topLevelFields = [
     'type',
     'user_id',
     'cid',
@@ -201,6 +243,7 @@ class Event {
     'channel_last_message_at',
     'parent_id',
     'hard_delete',
+    'deleted_for_me',
     'is_local',
     'ai_state',
     'ai_message',
@@ -213,17 +256,20 @@ class Event {
     'last_read_message_id',
     'draft',
     'reminder',
+    'scheduled_message',
     'push_preference',
     'channel_push_preference',
+    'channel_member_count',
     'channel_message_count',
+    'watcher_count',
     'last_delivered_at',
     'last_delivered_message_id',
   ];
 
   /// Serialize to json
   Map<String, dynamic> toJson() => Serializer.moveFromExtraDataToRoot(
-        _$EventToJson(this),
-      );
+    _$EventToJson(this),
+  );
 
   /// Creates a copy of [Event] with specified attributes overridden.
   Event copyWith({
@@ -248,6 +294,7 @@ class Event {
     bool? online,
     String? parentId,
     bool? hardDelete,
+    bool? deletedForMe,
     AITypingState? aiState,
     String? aiMessage,
     String? messageId,
@@ -259,56 +306,60 @@ class Event {
     String? lastReadMessageId,
     Draft? draft,
     MessageReminder? reminder,
+    ScheduledMessage? scheduledMessage,
     PushPreference? pushPreference,
     ChannelPushPreference? channelPushPreference,
+    int? channelMemberCount,
     int? channelMessageCount,
+    int? watcherCount,
     DateTime? lastDeliveredAt,
     String? lastDeliveredMessageId,
     Map<String, Object?>? extraData,
-  }) =>
-      Event(
-        type: type ?? this.type,
-        userId: userId ?? this.userId,
-        cid: cid ?? this.cid,
-        connectionId: connectionId ?? this.connectionId,
-        createdAt: createdAt ?? this.createdAt,
-        me: me ?? this.me,
-        user: user ?? this.user,
-        message: message ?? this.message,
-        poll: poll ?? this.poll,
-        pollVote: pollVote ?? this.pollVote,
-        totalUnreadCount: totalUnreadCount ?? this.totalUnreadCount,
-        unreadChannels: unreadChannels ?? this.unreadChannels,
-        reaction: reaction ?? this.reaction,
-        online: online ?? this.online,
-        channel: channel ?? this.channel,
-        member: member ?? this.member,
-        channelId: channelId ?? this.channelId,
-        channelType: channelType ?? this.channelType,
-        channelLastMessageAt: channelLastMessageAt ?? this.channelLastMessageAt,
-        parentId: parentId ?? this.parentId,
-        hardDelete: hardDelete ?? this.hardDelete,
-        aiState: aiState ?? this.aiState,
-        aiMessage: aiMessage ?? this.aiMessage,
-        messageId: messageId ?? this.messageId,
-        thread: thread ?? this.thread,
-        unreadThreadMessages: unreadThreadMessages ?? this.unreadThreadMessages,
-        unreadThreads: unreadThreads ?? this.unreadThreads,
-        lastReadAt: lastReadAt ?? this.lastReadAt,
-        unreadMessages: unreadMessages ?? this.unreadMessages,
-        lastReadMessageId: lastReadMessageId ?? this.lastReadMessageId,
-        draft: draft ?? this.draft,
-        reminder: reminder ?? this.reminder,
-        pushPreference: pushPreference ?? this.pushPreference,
-        channelPushPreference:
-            channelPushPreference ?? this.channelPushPreference,
-        channelMessageCount: channelMessageCount ?? this.channelMessageCount,
-        lastDeliveredAt: lastDeliveredAt ?? this.lastDeliveredAt,
-        lastDeliveredMessageId:
-            lastDeliveredMessageId ?? this.lastDeliveredMessageId,
-        isLocal: isLocal,
-        extraData: extraData ?? this.extraData,
-      );
+  }) => Event(
+    type: type ?? this.type,
+    userId: userId ?? this.userId,
+    cid: cid ?? this.cid,
+    connectionId: connectionId ?? this.connectionId,
+    createdAt: createdAt ?? this.createdAt,
+    me: me ?? this.me,
+    user: user ?? this.user,
+    message: message ?? this.message,
+    poll: poll ?? this.poll,
+    pollVote: pollVote ?? this.pollVote,
+    totalUnreadCount: totalUnreadCount ?? this.totalUnreadCount,
+    unreadChannels: unreadChannels ?? this.unreadChannels,
+    reaction: reaction ?? this.reaction,
+    online: online ?? this.online,
+    channel: channel ?? this.channel,
+    member: member ?? this.member,
+    channelId: channelId ?? this.channelId,
+    channelType: channelType ?? this.channelType,
+    channelLastMessageAt: channelLastMessageAt ?? this.channelLastMessageAt,
+    parentId: parentId ?? this.parentId,
+    hardDelete: hardDelete ?? this.hardDelete,
+    deletedForMe: deletedForMe ?? this.deletedForMe,
+    aiState: aiState ?? this.aiState,
+    aiMessage: aiMessage ?? this.aiMessage,
+    messageId: messageId ?? this.messageId,
+    thread: thread ?? this.thread,
+    unreadThreadMessages: unreadThreadMessages ?? this.unreadThreadMessages,
+    unreadThreads: unreadThreads ?? this.unreadThreads,
+    lastReadAt: lastReadAt ?? this.lastReadAt,
+    unreadMessages: unreadMessages ?? this.unreadMessages,
+    lastReadMessageId: lastReadMessageId ?? this.lastReadMessageId,
+    draft: draft ?? this.draft,
+    reminder: reminder ?? this.reminder,
+    scheduledMessage: scheduledMessage ?? this.scheduledMessage,
+    pushPreference: pushPreference ?? this.pushPreference,
+    channelPushPreference: channelPushPreference ?? this.channelPushPreference,
+    channelMemberCount: channelMemberCount ?? this.channelMemberCount,
+    channelMessageCount: channelMessageCount ?? this.channelMessageCount,
+    watcherCount: watcherCount ?? this.watcherCount,
+    lastDeliveredAt: lastDeliveredAt ?? this.lastDeliveredAt,
+    lastDeliveredMessageId: lastDeliveredMessageId ?? this.lastDeliveredMessageId,
+    isLocal: isLocal,
+    extraData: extraData ?? this.extraData,
+  );
 }
 
 /// {@template aiState}
@@ -327,7 +378,10 @@ enum AITypingState {
   error,
 
   /// The AI assistant is checking external sources.
-  @JsonValue('AI_STATE_CHECKING_SOURCES')
+  ///
+  /// Decoded from both `AI_STATE_CHECKING_SOURCES` and
+  /// `AI_STATE_EXTERNAL_SOURCES`.
+  @JsonValue(_kAiStateCheckingSources)
   checkingSources,
 
   /// The AI assistant is thinking.

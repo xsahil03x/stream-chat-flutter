@@ -1,14 +1,17 @@
+/// @docImport '../models/channel_model.dart';
+library;
+
 import 'dart:convert';
 
-import 'package:stream_chat/src/core/api/requests.dart';
-import 'package:stream_chat/src/core/api/responses.dart';
-import 'package:stream_chat/src/core/api/sort_order.dart';
-import 'package:stream_chat/src/core/http/stream_http_client.dart';
-import 'package:stream_chat/src/core/models/channel_state.dart';
-import 'package:stream_chat/src/core/models/event.dart';
-import 'package:stream_chat/src/core/models/filter.dart';
-import 'package:stream_chat/src/core/models/message.dart';
-import 'package:stream_chat/src/core/models/message_delivery.dart';
+import '../http/stream_http_client.dart';
+import '../models/channel_state.dart';
+import '../models/event.dart';
+import '../models/filter.dart';
+import '../models/message.dart';
+import '../models/message_delivery.dart';
+import 'requests.dart';
+import 'responses.dart';
+import 'sort_order.dart';
 
 /// Defines the api dedicated to channel operations
 class ChannelApi {
@@ -17,10 +20,13 @@ class ChannelApi {
 
   final StreamHttpClient _client;
 
-  String _getChannelUrl(String channelId, String channelType) =>
-      '/channels/$channelType/$channelId';
+  String _getChannelUrl(String channelId, String channelType) => '/channels/$channelType/$channelId';
 
-  /// Query the API, get messages, members or other channel fields
+  /// Queries a channel's messages, members and other fields.
+  ///
+  /// If [includeScheduledMessages] is true, the result's
+  /// [ChannelState.scheduledMessages] lists the current user's scheduled
+  /// messages in the channel, thread replies included.
   Future<ChannelState> queryChannel(
     String channelType, {
     bool state = true,
@@ -31,6 +37,7 @@ class ChannelApi {
     PaginationParams? messagesPagination,
     PaginationParams? membersPagination,
     PaginationParams? watchersPagination,
+    bool includeScheduledMessages = false,
   }) async {
     var channelPath = '/channels/$channelType';
     if (channelId != null) channelPath = '$channelPath/$channelId';
@@ -44,20 +51,38 @@ class ChannelApi {
         if (messagesPagination != null) 'messages': messagesPagination,
         if (membersPagination != null) 'members': membersPagination,
         if (watchersPagination != null) 'watchers': watchersPagination,
+        if (includeScheduledMessages) 'include_scheduled_messages': true,
       },
     );
     return ChannelState.fromJson(response.data);
   }
 
   /// Requests channels with a given query from the API.
+  ///
+  /// Either an inline [filter]/[sort] pair or a [predefinedFilter] identifier
+  /// (optionally interpolated with [filterValues] and [sortValues]) can be
+  /// provided. With a predefined filter, the filter and sort it stands for are
+  /// returned on [QueryChannelsResponse].
+  ///
+  /// If [includeScheduledMessages] is true, each returned channel's
+  /// [ChannelState.scheduledMessages] lists the current user's scheduled
+  /// messages in it, thread replies included.
+  ///
+  /// If [includeActiveMemberCount] is true, each returned channel has its
+  /// [ChannelModel.activeMemberCount] set.
   Future<QueryChannelsResponse> queryChannels({
     Filter? filter,
     SortOrder<ChannelState>? sort,
+    String? predefinedFilter,
+    Map<String, Object?>? filterValues,
+    Map<String, Object?>? sortValues,
     int? memberLimit,
     int? messageLimit,
     bool state = true,
     bool watch = true,
     bool presence = false,
+    bool includeScheduledMessages = false,
+    bool includeActiveMemberCount = false,
     PaginationParams paginationParams = const PaginationParams(),
   }) async {
     final response = await _client.get(
@@ -72,8 +97,13 @@ class ChannelApi {
           // passed options
           if (sort != null) 'sort': sort,
           if (filter != null) 'filter_conditions': filter,
+          if (predefinedFilter != null) 'predefined_filter': predefinedFilter,
+          if (filterValues != null) 'filter_values': filterValues,
+          if (sortValues != null) 'sort_values': sortValues,
           if (memberLimit != null) 'member_limit': memberLimit,
           if (messageLimit != null) 'message_limit': messageLimit,
+          if (includeScheduledMessages) 'include_scheduled_messages': true,
+          if (includeActiveMemberCount) 'include_active_member_count': true,
 
           // pagination
           ...paginationParams.toJson(),
@@ -100,8 +130,7 @@ class ChannelApi {
       _getChannelUrl(channelId, channelType),
       data: {
         'data': data,
-        if (message != null)
-          'message': message.copyWith(updatedAt: DateTime.now()),
+        if (message != null) 'message': message.copyWith(updatedAt: DateTime.now()),
       },
     );
     return UpdateChannelResponse.fromJson(response.data);
@@ -148,7 +177,9 @@ class ChannelApi {
     final response = await updateChannelPartial(
       channelId,
       channelType,
-      unset: ['cooldown'],
+      set: {
+        'cooldown': 0,
+      },
     );
     return response;
   }

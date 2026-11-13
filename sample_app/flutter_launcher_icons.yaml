@@ -1,0 +1,13 @@
+# flutter pub run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/ic_launcher.png"
+
+  # The Android adaptive icon uses a gradient background drawable, which the
+  # generator cannot produce, so it is maintained by hand.
+  android: false
+  ios: true # Generate iOS launcher icon
+  remove_alpha_ios: true # Apple App Store requires no transparency
+  web:
+    generate: true # Generate web favicon
+  macos:
+    generate: true # Generate macOS launcher icon

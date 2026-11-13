@@ -7,9 +7,10 @@ import 'package:drift/isolate.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:stream_chat_persistence/src/db/drift_chat_database.dart';
-import 'package:stream_chat_persistence/src/stream_chat_persistence_client.dart';
-import 'package:stream_chat_persistence/stream_chat_persistence.dart';
+
+import '../../../stream_chat_persistence.dart';
+import '../../stream_chat_persistence_client.dart';
+import '../drift_chat_database.dart';
 
 /// A Helper class to construct new instances of [DriftChatDatabase]
 /// specifically for native platform applications.
@@ -25,13 +26,15 @@ class SharedDB {
     if (connectionMode == ConnectionMode.background) {
       return DriftChatDatabase(
         userId,
-        DatabaseConnection.delayed(Future(() async {
-          final isolate = await _createDriftIsolate(
-            dbName,
-            logStatements: logStatements,
-          );
-          return isolate.connect();
-        })),
+        DatabaseConnection.delayed(
+          Future(() async {
+            final isolate = await _createDriftIsolate(
+              dbName,
+              logStatements: logStatements,
+            );
+            return isolate.connect();
+          }),
+        ),
       );
     }
 
@@ -64,10 +67,12 @@ class SharedDB {
   }
 
   static void _startBackground(_IsolateStartRequest request) {
-    final executor = LazyDatabase(() async => NativeDatabase(
-          File(request.targetPath),
-          logStatements: request.logStatements,
-        ));
+    final executor = LazyDatabase(
+      () async => NativeDatabase(
+        File(request.targetPath),
+        logStatements: request.logStatements,
+      ),
+    );
     final driftIsolate = DriftIsolate.inCurrent(
       () => DatabaseConnection(executor),
     );

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:stream_chat_flutter/stream_chat_flutter.dart';
+import '../../stream_chat_flutter.dart';
 
 /// A widget that shows an empty view when the [StreamScrollView] loads
 /// empty data.
+///
+/// Its content stays clear of the display cutouts and system bars reported by
+/// [MediaQuery]'s padding.
 class StreamScrollViewEmptyWidget extends StatelessWidget {
   /// Creates a new instance of the [StreamScrollViewEmptyWidget].
   const StreamScrollViewEmptyWidget({
@@ -35,27 +38,39 @@ class StreamScrollViewEmptyWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chatThemeData = StreamChatTheme.of(context);
+    final spacing = context.streamSpacing;
 
-    final emptyIcon = AnimatedSwitcher(
-      duration: kThemeChangeDuration,
+    final textTheme = context.streamTextTheme;
+    final colorScheme = context.streamColorScheme;
+
+    final effectiveTitleStyle = emptyTitleStyle ?? textTheme.captionDefault.copyWith(color: colorScheme.textSecondary);
+
+    final emptyIcon = IconTheme.merge(
+      data: IconThemeData(
+        size: 32,
+        color: colorScheme.textTertiary,
+      ),
       child: this.emptyIcon,
     );
 
     final emptyTitleText = AnimatedDefaultTextStyle(
-      style: emptyTitleStyle ?? chatThemeData.textTheme.headline,
+      style: effectiveTitleStyle,
       duration: kThemeChangeDuration,
       child: emptyTitle,
     );
 
-    return Column(
-      mainAxisSize: mainAxisSize,
-      mainAxisAlignment: mainAxisAlignment,
-      crossAxisAlignment: crossAxisAlignment,
-      children: [
-        emptyIcon,
-        emptyTitleText,
-      ],
+    return StreamSafeArea(
+      minimum: .symmetric(
+        horizontal: spacing.md,
+        vertical: spacing.xxxl,
+      ),
+      child: Column(
+        spacing: spacing.sm,
+        mainAxisSize: mainAxisSize,
+        mainAxisAlignment: mainAxisAlignment,
+        crossAxisAlignment: crossAxisAlignment,
+        children: [emptyIcon, emptyTitleText],
+      ),
     );
   }
 }

@@ -8,12 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
-import 'package:stream_chat_flutter/scrollable_positioned_list/src/element_registry.dart';
-import 'package:stream_chat_flutter/scrollable_positioned_list/src/indexed_key.dart';
-import 'package:stream_chat_flutter/scrollable_positioned_list/src/item_positions_listener.dart';
-import 'package:stream_chat_flutter/scrollable_positioned_list/src/item_positions_notifier.dart';
-import 'package:stream_chat_flutter/scrollable_positioned_list/src/scroll_view.dart';
-import 'package:stream_chat_flutter/scrollable_positioned_list/src/wrapping.dart';
+import 'element_registry.dart';
+import 'indexed_key.dart';
+import 'item_positions_listener.dart';
+import 'item_positions_notifier.dart';
+import 'scroll_view.dart';
 
 /// A list of widgets similar to [ListView], except scroll control
 /// and position reporting is based on index rather than pixel offset.
@@ -49,9 +48,9 @@ class PositionedList extends StatefulWidget {
     this.addAutomaticKeepAlives = true,
     this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
   }) : assert(
-          (positionedIndex == 0) || (positionedIndex < itemCount),
-          'positionedIndex must be 0 or a value less than itemCount',
-        );
+         (positionedIndex == 0) || (positionedIndex < itemCount),
+         'positionedIndex must be 0 or a value less than itemCount',
+       );
 
   /// Number of items the [itemBuilder] can produce.
   final int itemCount;
@@ -261,12 +260,9 @@ class _PositionedListState extends State<PositionedList> {
     final firstVisible = _firstVisibleIndex();
     final bucket = (firstVisible ~/ _slidingWindowSize) * _slidingWindowSize;
     final start = (bucket - _extraItemCount).clamp(0, widget.itemCount);
-    final end = (bucket + _slidingWindowSize + _extraItemCount)
-        .clamp(0, widget.itemCount);
+    final end = (bucket + _slidingWindowSize + _extraItemCount).clamp(0, widget.itemCount);
 
-    if (start == _cachedRangeStart &&
-        end == _cachedRangeEnd &&
-        widget.itemCount == _cachedItemCount) {
+    if (start == _cachedRangeStart && end == _cachedRangeEnd && widget.itemCount == _cachedItemCount) {
       return;
     }
 
@@ -331,8 +327,7 @@ class _PositionedListState extends State<PositionedList> {
   int? _findTrailingIndex(Key key) {
     final userIndex = _userIndexFromKey(key);
     if (userIndex == null) return null;
-    if (userIndex <= widget.positionedIndex || userIndex >= widget.itemCount)
-      return null;
+    if (userIndex <= widget.positionedIndex || userIndex >= widget.itemCount) return null;
     return widget.separatorBuilder == null
         ? userIndex - widget.positionedIndex - 1
         : (userIndex - widget.positionedIndex) * 2 - 1;
@@ -341,7 +336,7 @@ class _PositionedListState extends State<PositionedList> {
   @override
   Widget build(BuildContext context) {
     _rebuildKeyIndexMap();
-    return RegistryWidget(
+    Widget list = RegistryWidget(
       elementNotifier: registeredElements,
       child: UnboundedCustomScrollView(
         anchor: widget.alignment,
@@ -365,9 +360,7 @@ class _PositionedListState extends State<PositionedList> {
                       : _buildSeparatedListElement(
                           widget.positionedIndex * 2 - (index + 1),
                         ),
-                  childCount: widget.separatorBuilder == null
-                      ? widget.positionedIndex
-                      : widget.positionedIndex * 2,
+                  childCount: widget.separatorBuilder == null ? widget.positionedIndex : widget.positionedIndex * 2,
                   addSemanticIndexes: false,
                   addRepaintBoundaries: widget.addRepaintBoundaries,
                   addAutomaticKeepAlives: widget.addAutomaticKeepAlives,
@@ -393,8 +386,7 @@ class _PositionedListState extends State<PositionedList> {
               ),
             ),
           ),
-          if (widget.positionedIndex >= 0 &&
-              widget.positionedIndex < widget.itemCount - 1)
+          if (widget.positionedIndex >= 0 && widget.positionedIndex < widget.itemCount - 1)
             SliverPadding(
               padding: _trailingSliverPadding,
               sliver: SliverList(
@@ -417,6 +409,23 @@ class _PositionedListState extends State<PositionedList> {
         ],
       ),
     );
+
+    // Match BoxScrollView: when the main-axis MediaQuery padding was
+    // auto-consumed (no explicit padding), strip it from descendants so nested
+    // widgets and scrollables don't inset for it a second time.
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (widget.padding == null && mediaQuery != null) {
+      list = MediaQuery(
+        data: mediaQuery.copyWith(
+          padding: widget.scrollDirection == Axis.vertical
+              ? mediaQuery.padding.copyWith(top: 0, bottom: 0)
+              : mediaQuery.padding.copyWith(left: 0, right: 0),
+        ),
+        child: list,
+      );
+    }
+
+    return list;
   }
 
   Widget _buildSeparatedListElement(int index) {
@@ -440,29 +449,33 @@ class _PositionedListState extends State<PositionedList> {
     // null (e.g. headers, loaders, separators that don't need
     // cross-rebuild identity).
     final stableKey = widget.itemKeyBuilder?.call(index);
-    final child = stableKey != null
-        ? KeyedSubtree(key: ValueKey<Object>(stableKey), child: builtChild)
-        : builtChild;
+    final child = stableKey != null ? KeyedSubtree(key: ValueKey<Object>(stableKey), child: builtChild) : builtChild;
 
     return RegisteredElementWidget(
       key: IndexedKey(child.key, index),
-      child: widget.addSemanticIndexes
-          ? IndexedSemantics(index: index, child: child)
-          : child,
+      child: widget.addSemanticIndexes ? IndexedSemantics(index: index, child: child) : child,
     );
   }
 
-  EdgeInsets get _resolvedPadding =>
-      widget.padding
-          ?.resolve(Directionality.maybeOf(context) ?? TextDirection.ltr) ??
-      EdgeInsets.zero;
+  EdgeInsets get _resolvedPadding {
+    final padding = widget.padding;
+    if (padding != null) {
+      return padding.resolve(Directionality.maybeOf(context) ?? TextDirection.ltr);
+    }
+    // Match BoxScrollView: with no explicit padding, consume the main-axis
+    // MediaQuery padding so the list auto-insets like a ListView. The cross-axis
+    // remainder is handed to descendants in [build].
+    final mediaPadding = MediaQuery.maybeOf(context)?.padding ?? EdgeInsets.zero;
+    return widget.scrollDirection == Axis.vertical
+        ? mediaPadding.copyWith(left: 0, right: 0)
+        : mediaPadding.copyWith(top: 0, bottom: 0);
+  }
 
   AxisDirection get _axisDirection {
     if (widget.scrollDirection == Axis.vertical) {
       return widget.reverse ? AxisDirection.up : AxisDirection.down;
     }
-    final ltr = (Directionality.maybeOf(context) ?? TextDirection.ltr) ==
-        TextDirection.ltr;
+    final ltr = (Directionality.maybeOf(context) ?? TextDirection.ltr) == TextDirection.ltr;
     if (widget.reverse) {
       return ltr ? AxisDirection.left : AxisDirection.right;
     }
@@ -546,14 +559,6 @@ class _PositionedListState extends State<PositionedList> {
         for (final element in elements) {
           final box = element.renderObject! as RenderBox;
           viewport ??= RenderAbstractViewport.of(box) as RenderViewportBase?;
-          var anchor = 0.0;
-          if (viewport is RenderViewport) {
-            anchor = viewport.anchor;
-          }
-
-          if (viewport is CustomRenderViewport) {
-            anchor = viewport.anchor;
-          }
 
           final key = element.widget.key! as IndexedKey;
           // Skip this element if `box` has never been laid out, isn't
@@ -574,39 +579,51 @@ class _PositionedListState extends State<PositionedList> {
           if (!box.attached) continue;
           try {
             if (widget.scrollDirection == Axis.vertical) {
+              // `getOffsetToReveal` is anchor-aware on both viewports used
+              // here (see `UnboundedRenderViewport.getOffsetToReveal`), so
+              // the delta against the current pixels is already the item's
+              // painted offset from the viewport's leading edge.
               final reveal = viewport!.getOffsetToReveal(box, 0).offset;
               if (!reveal.isFinite) continue;
-              final itemOffset = reveal -
-                  viewport.offset.pixels +
-                  anchor * viewport.size.height;
+              final itemOffset = reveal - viewport.offset.pixels;
+              final viewportDimension = scrollController.position.viewportDimension;
+              // content* edges are measured from the visible content (inside the
+              // padding) so overlays under a floating bar can key off 0..1;
+              // subtract the leading padding (the bottom when reversed, which
+              // `_leadingSliverPadding` resolves). item* stays viewport-relative
+              // for scroll mechanics (alignment / anchor preservation).
+              final leadingPad = _leadingSliverPadding.vertical;
+              final contentExtent = viewportDimension - _resolvedPadding.vertical;
+              final contentDenom = contentExtent > 0 ? contentExtent : viewportDimension;
               positions.add(
                 ItemPosition(
                   index: key.index,
-                  itemLeadingEdge: itemOffset.round() /
-                      scrollController.position.viewportDimension,
-                  itemTrailingEdge: (itemOffset + box.size.height).round() /
-                      scrollController.position.viewportDimension,
+                  itemLeadingEdge: itemOffset.round() / viewportDimension,
+                  itemTrailingEdge: (itemOffset + box.size.height).round() / viewportDimension,
+                  contentLeadingEdge: (itemOffset - leadingPad).round() / contentDenom,
+                  contentTrailingEdge: (itemOffset + box.size.height - leadingPad).round() / contentDenom,
                 ),
               );
             } else {
-              final itemOffset =
-                  box.localToGlobal(Offset.zero, ancestor: viewport).dx;
+              final itemOffset = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
               if (!itemOffset.isFinite) continue;
-              final viewportDimension =
-                  scrollController.position.viewportDimension;
+              final viewportDimension = scrollController.position.viewportDimension;
               // Branch on the resolved axis direction so RTL is handled.
               final isRight = _axisDirection == AxisDirection.right;
-              final leadingPx = isRight
-                  ? itemOffset
-                  : viewportDimension - (itemOffset + box.size.width);
-              final trailingPx = isRight
-                  ? itemOffset + box.size.width
-                  : viewportDimension - itemOffset;
+              final leadingPx = isRight ? itemOffset : viewportDimension - (itemOffset + box.size.width);
+              final trailingPx = isRight ? itemOffset + box.size.width : viewportDimension - itemOffset;
+              // content* edges (see the vertical branch): drop the leading
+              // padding so 0..1 spans the visible content.
+              final leadingPad = _leadingSliverPadding.horizontal;
+              final contentExtent = viewportDimension - _resolvedPadding.horizontal;
+              final contentDenom = contentExtent > 0 ? contentExtent : viewportDimension;
               positions.add(
                 ItemPosition(
                   index: key.index,
                   itemLeadingEdge: leadingPx.round() / viewportDimension,
                   itemTrailingEdge: trailingPx.round() / viewportDimension,
+                  contentLeadingEdge: (leadingPx - leadingPad).round() / contentDenom,
+                  contentTrailingEdge: (trailingPx - leadingPad).round() / contentDenom,
                 ),
               );
             }

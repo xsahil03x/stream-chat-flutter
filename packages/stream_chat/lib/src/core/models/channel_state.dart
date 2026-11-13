@@ -1,12 +1,17 @@
+/// @docImport '../../client/channel/channel_client_state.dart';
+library;
+
 import 'package:json_annotation/json_annotation.dart';
-import 'package:stream_chat/src/core/models/channel_model.dart';
-import 'package:stream_chat/src/core/models/comparable_field.dart';
-import 'package:stream_chat/src/core/models/draft.dart';
-import 'package:stream_chat/src/core/models/member.dart';
-import 'package:stream_chat/src/core/models/message.dart';
-import 'package:stream_chat/src/core/models/push_preference.dart';
-import 'package:stream_chat/src/core/models/read.dart';
-import 'package:stream_chat/src/core/models/user.dart';
+import 'channel_model.dart';
+import 'comparable_field.dart';
+import 'draft.dart';
+import 'location.dart';
+import 'member.dart';
+import 'message.dart';
+import 'push_preference.dart';
+import 'read.dart';
+import 'scheduled_message.dart';
+import 'user.dart';
 
 part 'channel_state.g.dart';
 
@@ -32,6 +37,8 @@ class ChannelState implements ComparableFieldProvider {
     this.draft,
     this.pendingMessages,
     this.pushPreferences,
+    this.activeLiveLocations,
+    this.scheduledMessages,
   });
 
   /// The channel to which this state belongs
@@ -86,9 +93,18 @@ class ChannelState implements ComparableFieldProvider {
   /// The push preferences for this channel if it exists.
   final ChannelPushPreference? pushPreferences;
 
+  /// The list of active live locations in the channel.
+  final List<Location>? activeLiveLocations;
+
+  /// The current user's scheduled messages in this channel when it was queried.
+  ///
+  /// Use [ChannelClientState.scheduledMessages] for the list as it changes.
+  /// Null when the query did not ask for them.
+  @JsonKey(includeToJson: false)
+  final List<ScheduledMessage>? scheduledMessages;
+
   /// Create a new instance from a json
-  static ChannelState fromJson(Map<String, dynamic> json) =>
-      _$ChannelStateFromJson(json);
+  static ChannelState fromJson(Map<String, dynamic> json) => _$ChannelStateFromJson(json);
 
   /// Serialize to json
   Map<String, dynamic> toJson() => _$ChannelStateToJson(this);
@@ -106,20 +122,23 @@ class ChannelState implements ComparableFieldProvider {
     Object? draft = _nullConst,
     List<Message>? pendingMessages,
     ChannelPushPreference? pushPreferences,
-  }) =>
-      ChannelState(
-        channel: channel ?? this.channel,
-        messages: messages ?? this.messages,
-        members: members ?? this.members,
-        pinnedMessages: pinnedMessages ?? this.pinnedMessages,
-        watcherCount: watcherCount ?? this.watcherCount,
-        watchers: watchers ?? this.watchers,
-        read: read ?? this.read,
-        membership: membership ?? this.membership,
-        draft: draft == _nullConst ? this.draft : draft as Draft?,
-        pendingMessages: pendingMessages ?? this.pendingMessages,
-        pushPreferences: pushPreferences ?? this.pushPreferences,
-      );
+    List<Location>? activeLiveLocations,
+    List<ScheduledMessage>? scheduledMessages,
+  }) => ChannelState(
+    channel: channel ?? this.channel,
+    messages: messages ?? this.messages,
+    members: members ?? this.members,
+    pinnedMessages: pinnedMessages ?? this.pinnedMessages,
+    watcherCount: watcherCount ?? this.watcherCount,
+    watchers: watchers ?? this.watchers,
+    read: read ?? this.read,
+    membership: membership ?? this.membership,
+    draft: draft == _nullConst ? this.draft : draft as Draft?,
+    pendingMessages: pendingMessages ?? this.pendingMessages,
+    pushPreferences: pushPreferences ?? this.pushPreferences,
+    activeLiveLocations: activeLiveLocations ?? this.activeLiveLocations,
+    scheduledMessages: scheduledMessages ?? this.scheduledMessages,
+  );
 
   @override
   ComparableField? getComparableField(String sortKey) {

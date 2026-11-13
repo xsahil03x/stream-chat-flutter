@@ -20,27 +20,14 @@ class MessageInfoSheet extends StatelessWidget {
     required BuildContext context,
     required Message message,
   }) {
-    final theme = StreamChatTheme.of(context);
-    return showModalBottomSheet<void>(
+    return showStreamSheet<void>(
       context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: theme.colorTheme.appBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(16),
-        ),
-      ),
-      builder: (_) => StreamChannel(
+      isDismissible: true,
+      builder: (_, scrollController) => StreamChannel.value(
         channel: StreamChannel.of(context).channel,
-        child: DraggableScrollableSheet(
-          snap: true,
-          expand: false,
-          snapSizes: const [0.5, 1],
-          builder: (context, controller) => MessageInfoSheet(
-            message: message,
-            scrollController: controller,
-          ),
+        child: MessageInfoSheet(
+          message: message,
+          scrollController: scrollController,
         ),
       ),
     );
@@ -48,17 +35,15 @@ class MessageInfoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = StreamChatTheme.of(context);
-    final colorTheme = theme.colorTheme;
-    final textTheme = theme.textTheme;
+    final colorScheme = context.streamColorScheme;
+    final textTheme = context.streamTextTheme;
+    final spacing = context.streamSpacing;
 
     final channel = StreamChannel.of(context).channel;
 
     return Column(
       children: [
-        // Header
-        _buildHeader(context),
-
+        StreamSheetHeader(title: const Text('Message Info')),
         // Delivery and read receipts
         Expanded(
           child: BetterStreamBuilder<List<Read>>(
@@ -66,7 +51,7 @@ class MessageInfoSheet extends StatelessWidget {
             initialData: channel.state?.read,
             noDataBuilder: (context) => Center(
               child: CircularProgressIndicator.adaptive(
-                valueColor: AlwaysStoppedAnimation(colorTheme.accentPrimary),
+                valueColor: AlwaysStoppedAnimation(colorScheme.accentPrimary),
               ),
             ),
             builder: (context, reads) {
@@ -83,12 +68,12 @@ class MessageInfoSheet extends StatelessWidget {
                       Icon(
                         Icons.info_outline,
                         size: 56,
-                        color: colorTheme.textLowEmphasis,
+                        color: colorScheme.textSecondary,
                       ),
                       Text(
                         'No delivery information available',
-                        style: textTheme.body.copyWith(
-                          color: colorTheme.textLowEmphasis,
+                        style: textTheme.bodyDefault.copyWith(
+                          color: colorScheme.textSecondary,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -99,7 +84,7 @@ class MessageInfoSheet extends StatelessWidget {
 
               return ListView(
                 controller: scrollController,
-                padding: const EdgeInsets.all(16),
+                padding: .symmetric(horizontal: spacing.xxs, vertical: spacing.md),
                 children: [
                   // Read section
                   if (readBy.isNotEmpty) ...[
@@ -135,94 +120,30 @@ class MessageInfoSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    final theme = StreamChatTheme.of(context);
-    final textTheme = theme.textTheme;
-    final colorTheme = theme.colorTheme;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: colorTheme.borders,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Message Info',
-            style: textTheme.headlineBold,
-          ),
-          IconButton(
-            iconSize: 32,
-            icon: const StreamSvgIcon(icon: StreamSvgIcons.close),
-            onPressed: Navigator.of(context).maybePop,
-            color: colorTheme.textHighEmphasis,
-            padding: const EdgeInsets.all(4),
-            style: ButtonStyle(
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: WidgetStateProperty.all(const Size.square(32)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSection(
     BuildContext context, {
     required String title,
     required List<Read> reads,
     required Widget Function(BuildContext context, Read item) itemBuilder,
   }) {
-    final theme = StreamChatTheme.of(context);
-    final colorTheme = theme.colorTheme;
-    final textTheme = theme.textTheme;
+    final colorScheme = context.streamColorScheme;
+    final textTheme = context.streamTextTheme;
+    final spacing = context.streamSpacing;
 
     return Column(
-      spacing: 12,
+      spacing: spacing.xxs,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section title
-        Text(
-          title,
-          style: textTheme.footnote.copyWith(
-            color: colorTheme.textLowEmphasis,
-          ),
-        ),
-
-        // List of items
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.colorTheme.barsBg,
-            ),
-            child: MediaQuery.removePadding(
-              context: context,
-              // Workaround for the bottom padding issue.
-              // Link: https://github.com/flutter/flutter/issues/156149
-              removeTop: true,
-              removeBottom: true,
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: reads.length,
-                physics: const NeverScrollableScrollPhysics(),
-                separatorBuilder: (_, __) => Divider(
-                  height: 1,
-                  color: theme.colorTheme.borders,
-                ),
-                itemBuilder: (_, index) => itemBuilder(
-                  context,
-                  reads[index],
-                ),
-              ),
+        Padding(
+          padding: .only(left: spacing.sm, right: spacing.sm, bottom: spacing.xs),
+          child: Text(
+            title,
+            style: textTheme.captionDefault.copyWith(
+              color: colorScheme.textSecondary,
             ),
           ),
         ),
+        for (final read in reads) itemBuilder(context, read),
       ],
     );
   }
@@ -240,46 +161,24 @@ class _UserReadTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = StreamChatTheme.of(context);
+    final spacing = context.streamSpacing;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
+    return StreamListTileTheme(
+      data: StreamListTileThemeData(
+        minTileHeight: 44, // Matches the design's tap target size
+        contentPadding: .symmetric(horizontal: spacing.sm),
       ),
-      child: Row(
-        children: [
-          // User avatar
-          StreamUserAvatar(
-            user: read.user,
-            constraints: const BoxConstraints.tightFor(
-              height: 40,
-              width: 40,
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // User name
-          Expanded(
-            child: Text(
-              read.user.name,
-              style: theme.textTheme.bodyBold,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-
-          // Status icon
-          StreamSvgIcon(
-            size: 18,
-            icon: StreamSvgIcons.checkAll,
-            color: switch (isDelivered) {
-              true => theme.colorTheme.textLowEmphasis,
-              false => theme.colorTheme.accentPrimary,
-            },
-          ),
-        ],
+      child: StreamListTile(
+        leading: StreamUserAvatar(user: read.user),
+        title: Text(read.user.name, maxLines: 1, overflow: .ellipsis),
+        trailing: Icon(
+          context.streamIcons.checks,
+          size: 18,
+          color: switch (isDelivered) {
+            true => context.streamColorScheme.textSecondary,
+            false => context.streamColorScheme.accentPrimary,
+          },
+        ),
       ),
     );
   }

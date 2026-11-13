@@ -31,9 +31,9 @@ abstract class StreamAttachmentHandlerBase {
     FileType type = FileType.any,
     List<String>? allowedExtensions,
     Function(FilePickerStatus)? onFileLoading,
-    bool allowCompression = true,
-    bool withData = true,
-    bool withReadStream = false,
+    int compressionQuality = 0,
+    @Deprecated('Content is read on demand; this no longer has any effect.') bool withData = true,
+    @Deprecated('Content is read on demand; this no longer has any effect.') bool withReadStream = false,
     bool lockParentWindow = true,
   }) {
     throw UnimplementedError('pickFile is not implemented');

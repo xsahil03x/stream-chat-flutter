@@ -1,3 +1,4 @@
+import 'package:stream_chat/src/core/api/responses.dart';
 import 'package:stream_chat/src/core/models/action.dart';
 import 'package:stream_chat/src/core/models/attachment.dart';
 import 'package:stream_chat/src/core/models/attachment_file.dart';
@@ -29,8 +30,7 @@ void main() {
       final channel = Attachment(
         type: 'giphy',
         title: 'soo',
-        titleLink:
-            'https://giphy.com/gifs/nrkp3-dance-happy-3o7TKnCdBx5cMg0qti',
+        titleLink: 'https://giphy.com/gifs/nrkp3-dance-happy-3o7TKnCdBx5cMg0qti',
       );
 
       expect(
@@ -38,8 +38,7 @@ void main() {
         {
           'type': 'giphy',
           'title': 'soo',
-          'title_link':
-              'https://giphy.com/gifs/nrkp3-dance-happy-3o7TKnCdBx5cMg0qti',
+          'title_link': 'https://giphy.com/gifs/nrkp3-dance-happy-3o7TKnCdBx5cMg0qti',
           'actions': [],
         },
       );
@@ -51,17 +50,12 @@ void main() {
 
       expect(attachment.fileSize, 3);
       expect(attachment.mimeType, 'text/plain');
-      expect(attachment.toJson(), {
-        'title': 'myfile.txt',
-        'actions': [],
-        'file_size': 3,
-        'mime_type': 'text/plain'
-      });
+      expect(attachment.toJson(), {'title': 'myfile.txt', 'actions': [], 'file_size': 3, 'mime_type': 'text/plain'});
       expect(Attachment.fromJson(attachment.toJson()).toJson(), {
         'title': 'myfile.txt',
         'actions': [],
         'file_size': 3,
-        'mime_type': 'text/plain'
+        'mime_type': 'text/plain',
       });
 
       // Setting the size and mimeType using extraData should work fine
@@ -88,10 +82,13 @@ void main() {
 
       // if file is available, should override size and mimeType.
       final fileThree = AttachmentFile(size: 9, path: 'myfolder/fileThree.png');
-      newAttachment = attachment.copyWith(file: fileThree, extraData: {
-        'file_size': 88,
-        'mime_type': 'application/pdf',
-      });
+      newAttachment = attachment.copyWith(
+        file: fileThree,
+        extraData: {
+          'file_size': 88,
+          'mime_type': 'application/pdf',
+        },
+      );
 
       expect(newAttachment.extraData['file_size'], 9);
       expect(newAttachment.extraData['mime_type'], 'image/png');
@@ -164,6 +161,54 @@ void main() {
           titleLink: 'https://example.com',
         );
         expect(autoUrlAttachment.isUrlPreview, isTrue);
+      });
+
+      test('reports a scraped image without a title link as a url preview', () {
+        final scrapedImageAttachment = Attachment(
+          type: 'image',
+          ogScrapeUrl: 'https://images.example.com/photo.jpg',
+          imageUrl: 'https://images.example.com/photo.jpg',
+        );
+
+        expect(scrapedImageAttachment.type, AttachmentType.urlPreview);
+      });
+
+      test('serializes the original type of a scraped attachment', () {
+        final scrapedVideoAttachment = Attachment(
+          type: 'video',
+          ogScrapeUrl: 'https://youtube.com/watch?v=xOX7MsrbaPY',
+          titleLink: 'https://www.youtube.com/watch?v=xOX7MsrbaPY',
+        );
+
+        expect(scrapedVideoAttachment.toJson()['type'], 'video');
+      });
+
+      test('keeps the original type of a scraped attachment when copied', () {
+        final scrapedImageAttachment = Attachment(
+          type: 'image',
+          ogScrapeUrl: 'https://images.example.com/photo.jpg',
+        );
+
+        final copy = scrapedImageAttachment.copyWith(title: 'Photo');
+
+        expect(copy.toJson()['type'], 'image');
+      });
+
+      test('tells apart scraped attachments with different original types', () {
+        const link = 'https://example.com/media';
+        final scrapedImage = Attachment(id: 'og', type: 'image', ogScrapeUrl: link);
+        final scrapedVideo = Attachment(id: 'og', type: 'video', ogScrapeUrl: link);
+
+        expect(scrapedImage, isNot(scrapedVideo));
+      });
+
+      test('sends no type for a scraped link the server gave no type', () {
+        final ogAttachment = OGAttachmentResponse()..ogScrapeUrl = 'https://getstream.io/blog';
+
+        final attachment = Attachment.fromOGAttachment(ogAttachment);
+
+        expect(attachment.type, AttachmentType.urlPreview);
+        expect(attachment.toJson(), isNot(contains('type')));
       });
     });
   });

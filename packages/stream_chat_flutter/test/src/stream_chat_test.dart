@@ -139,4 +139,173 @@ void main() {
       },
     );
   });
+
+  group('StreamChat theme injection', () {
+    testWidgets(
+      'descendants find StreamTheme via Theme.of(context).extension when host '
+      'app did not register one',
+      (tester) async {
+        final mockClient = MockClient();
+        StreamTheme? captured;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: StreamChat(
+              client: mockClient,
+              child: Builder(
+                builder: (context) {
+                  captured = Theme.of(context).extension<StreamTheme>();
+                  return const Text('Child');
+                },
+              ),
+            ),
+          ),
+        );
+
+        expect(captured, isNotNull);
+      },
+    );
+
+    testWidgets(
+      'preserves a StreamTheme that the host app already registered on '
+      'MaterialApp.theme.extensions',
+      (tester) async {
+        final mockClient = MockClient();
+        final registered = StreamTheme.light();
+        StreamTheme? captured;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(extensions: [registered]),
+            home: StreamChat(
+              client: mockClient,
+              child: Builder(
+                builder: (context) {
+                  captured = Theme.of(context).extension<StreamTheme>();
+                  return const Text('Child');
+                },
+              ),
+            ),
+          ),
+        );
+
+        expect(captured, same(registered));
+      },
+    );
+
+    testWidgets(
+      'preserves other Material theme extensions registered above StreamChat',
+      (tester) async {
+        final mockClient = MockClient();
+        const sibling = _SiblingThemeExtension(label: 'kept');
+        _SiblingThemeExtension? captured;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(extensions: const [sibling]),
+            home: StreamChat(
+              client: mockClient,
+              child: Builder(
+                builder: (context) {
+                  captured = Theme.of(context).extension<_SiblingThemeExtension>();
+                  return const Text('Child');
+                },
+              ),
+            ),
+          ),
+        );
+
+        expect(captured, same(sibling));
+      },
+    );
+
+    testWidgets(
+      'a dialog opened below StreamChat follows the app theme when the '
+      'brightness changes',
+      (tester) async {
+        tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+        addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+        final mockClient = MockClient();
+        final light = StreamTheme.light();
+        final dark = StreamTheme.dark();
+        StreamTheme? captured;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(extensions: [light]),
+            darkTheme: ThemeData(brightness: Brightness.dark, extensions: [dark]),
+            home: StreamChat(
+              client: mockClient,
+              child: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (context) {
+                      captured = Theme.of(context).extension<StreamTheme>();
+                      return const Text('Dialog');
+                    },
+                  ),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open'));
+        await tester.pumpAndSettle();
+        expect(captured, same(light));
+
+        tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+        await tester.pumpAndSettle();
+        expect(captured, same(dark));
+      },
+    );
+
+    testWidgets(
+      'keeps the state below StreamChat when only one of the app themes '
+      'registers a StreamTheme',
+      (tester) async {
+        tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+        addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+
+        final mockClient = MockClient();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(extensions: [StreamTheme.light()]),
+            darkTheme: ThemeData(brightness: Brightness.dark),
+            home: StreamChat(
+              client: mockClient,
+              child: const Material(child: TextField()),
+            ),
+          ),
+        );
+
+        await tester.enterText(find.byType(TextField), 'draft');
+
+        tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+        await tester.pumpAndSettle();
+
+        expect(find.text('draft'), findsOneWidget);
+      },
+    );
+  });
+}
+
+class _SiblingThemeExtension extends ThemeExtension<_SiblingThemeExtension> {
+  const _SiblingThemeExtension({required this.label});
+
+  final String label;
+
+  @override
+  ThemeExtension<_SiblingThemeExtension> copyWith({String? label}) =>
+      _SiblingThemeExtension(label: label ?? this.label);
+
+  @override
+  ThemeExtension<_SiblingThemeExtension> lerp(
+    covariant ThemeExtension<_SiblingThemeExtension>? other,
+    double t,
+  ) => this;
 }

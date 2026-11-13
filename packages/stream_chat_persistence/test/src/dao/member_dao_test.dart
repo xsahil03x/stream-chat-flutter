@@ -39,7 +39,7 @@ void main() {
     );
     await database.userDao.updateUsers(users);
     await database.channelDao.updateChannels(channels);
-    await memberDao.updateMembers(cid, memberList);
+    await memberDao.bulkUpdateMembers({cid: memberList});
     return memberList;
   }
 
@@ -102,19 +102,25 @@ void main() {
     final targetUser = User(id: targetUserId);
     final otherUser = User(id: 'otherUserId');
     Member memberFor(User user) => Member(
-          user: user,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
+      user: user,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
     await database.userDao.updateUsers([targetUser, otherUser]);
     await database.channelDao.updateChannels([
       ChannelModel(cid: cid1),
       ChannelModel(cid: cid2),
       ChannelModel(cid: cid3),
     ]);
-    await memberDao.updateMembers(cid1, [memberFor(targetUser)]);
-    await memberDao.updateMembers(cid2, [memberFor(targetUser)]);
-    await memberDao.updateMembers(cid3, [memberFor(otherUser)]);
+    await memberDao.bulkUpdateMembers({
+      cid1: [memberFor(targetUser)],
+    });
+    await memberDao.bulkUpdateMembers({
+      cid2: [memberFor(targetUser)],
+    });
+    await memberDao.bulkUpdateMembers({
+      cid3: [memberFor(otherUser)],
+    });
 
     // Should return memberships only for channels where target user
     // is a member, keyed by channelCid.
@@ -174,7 +180,9 @@ void main() {
       updatedAt: DateTime.now(),
     );
     await database.userDao.updateUsers([newUser]);
-    await memberDao.updateMembers(cid, [copyMember, newMember]);
+    await memberDao.bulkUpdateMembers({
+      cid: [copyMember, newMember],
+    });
 
     // Fetched member length should be one more than inserted members.
     // copyMember `banned` modified field should be true.
@@ -182,15 +190,11 @@ void main() {
     final newFetchedMembers = await memberDao.getMembersByCid(cid);
     expect(newFetchedMembers.length, fetchedMembers.length + 1);
     expect(
-      newFetchedMembers
-          .firstWhere((it) => it.user!.id == copyMember.user!.id)
-          .banned,
+      newFetchedMembers.firstWhere((it) => it.user!.id == copyMember.user!.id).banned,
       true,
     );
     expect(
-      newFetchedMembers
-          .where((it) => it.user!.id == newMember.user!.id)
-          .isNotEmpty,
+      newFetchedMembers.where((it) => it.user!.id == newMember.user!.id).isNotEmpty,
       true,
     );
   });

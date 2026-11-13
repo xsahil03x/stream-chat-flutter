@@ -81,19 +81,28 @@ class KeyStrokeHandler {
   ///
   /// This is meant to be called every time the user presses a key. The method
   /// will manage requests and timer as needed.
+  ///
+  /// Switching [parentId] stops typing under the previous one.
   Future<void> call([String? parentId]) async {
+    if (_lastTypingEvent != null && parentId != _currentParentId) {
+      // ignore: no-empty-block
+      _stopTyping(_currentParentId).catchError((_) {});
+    }
+
     final completer = _resetKeyStrokeCompleter();
 
     _cancelKeyStrokeTimer();
 
     _keyStrokeTimer = Timer(Duration(seconds: startTypingEventTimeout), () {
-      _stopTyping(parentId).then((_) {
-        if (completer.isCompleted) return;
-        completer.complete();
-      }).onError((error, stackTrace) {
-        if (completer.isCompleted) return;
-        completer.completeError(error!, stackTrace);
-      });
+      _stopTyping(parentId)
+          .then((_) {
+            if (completer.isCompleted) return;
+            completer.complete();
+          })
+          .onError((error, stackTrace) {
+            if (completer.isCompleted) return;
+            completer.completeError(error!, stackTrace);
+          });
     });
 
     // If the user is typing too long, it should call [onStartTyping] again.

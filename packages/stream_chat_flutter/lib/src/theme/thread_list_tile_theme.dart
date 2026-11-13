@@ -1,15 +1,18 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:stream_chat_flutter/src/theme/stream_chat_theme.dart';
-import 'package:stream_chat_flutter/src/utils/date_formatter.dart';
+import 'package:theme_extensions_builder_annotation/theme_extensions_builder_annotation.dart';
+
+import '../utils/date_formatter.dart';
+import 'message_preview_text_theme.dart';
+import 'stream_chat_theme.dart';
+
+part 'thread_list_tile_theme.g.theme.dart';
 
 /// {@template streamThreadListTileTheme}
 /// Overrides the default style of [StreamThreadListTile] descendants.
 ///
 /// See also:
 ///
-///  * [StreamPollOptionVotesDialogThemeData], which is used to configure this
-///    theme.
+///  * [StreamThreadListTileThemeData], which is used to configure this theme.
 /// {@endtemplate}
 class StreamThreadListTileTheme extends InheritedTheme {
   /// Creates a [StreamThreadListTileTheme].
@@ -24,43 +27,49 @@ class StreamThreadListTileTheme extends InheritedTheme {
   /// The configuration of this theme.
   final StreamThreadListTileThemeData data;
 
-  /// The closest instance of this class that encloses the given context.
+  /// The [StreamThreadListTileThemeData] for the given context.
   ///
-  /// If there is no enclosing [StreamThreadListTileTheme] widget, then
-  /// [StreamChatThemeData.pollOptionVotesDialogTheme] is used.
+  /// Values from the nearest [StreamThreadListTileTheme] ancestor take
+  /// precedence over [StreamChatThemeData.threadListTileTheme].
   static StreamThreadListTileThemeData of(BuildContext context) {
-    final threadListTileTheme =
-        context.dependOnInheritedWidgetOfExactType<StreamThreadListTileTheme>();
-    return threadListTileTheme?.data ??
-        StreamChatTheme.of(context).threadListTileTheme;
+    final localTheme = context.dependOnInheritedWidgetOfExactType<StreamThreadListTileTheme>();
+    return StreamChatTheme.of(context).threadListTileTheme.merge(localTheme?.data);
   }
 
   @override
-  Widget wrap(BuildContext context, Widget child) =>
-      StreamThreadListTileTheme(data: data, child: child);
+  Widget wrap(BuildContext context, Widget child) => StreamThreadListTileTheme(data: data, child: child);
 
   @override
-  bool updateShouldNotify(StreamThreadListTileTheme oldWidget) =>
-      data != oldWidget.data;
+  bool updateShouldNotify(StreamThreadListTileTheme oldWidget) => data != oldWidget.data;
 }
 
 /// {@template streamThreadListTileThemeData}
-/// A style that overrides the default appearance of
-/// [StreamPollOptionVotesDialog] widgets when used with
-/// [StreamPollCommentsDialogTheme] or with the overall [StreamChatTheme]'s
-/// [StreamChatThemeData.pollOptionVotesDialogTheme].
+/// Theme data for customizing [StreamThreadListTile] widgets.
+///
+/// When a property is null the widget falls back to computed defaults derived
+/// from the ambient [StreamTextTheme] and [StreamColorScheme]. See
+/// [StreamThreadListTile] for the built-in default values.
+///
+/// See also:
+///
+///  * [StreamThreadListTileTheme], the inherited theme widget.
+///  * [StreamChatThemeData.threadListTileTheme], global theme entry-point.
 /// {@endtemplate}
-class StreamThreadListTileThemeData with Diagnosticable {
+@themeGen
+@immutable
+class StreamThreadListTileThemeData with _$StreamThreadListTileThemeData {
   /// {@macro streamThreadListTileThemeData}
   const StreamThreadListTileThemeData({
     this.padding,
     this.backgroundColor,
     this.threadChannelNameStyle,
     this.threadReplyToMessageStyle,
+    this.messagePreviewTextTheme,
     this.threadLatestReplyUsernameStyle,
     this.threadLatestReplyMessageStyle,
     this.threadLatestReplyTimestampStyle,
     this.threadLatestReplyTimestampFormatter,
+    this.threadReplyCountStyle,
     this.threadUnreadMessageCountStyle,
     this.threadUnreadMessageCountBackgroundColor,
   });
@@ -72,26 +81,43 @@ class StreamThreadListTileThemeData with Diagnosticable {
   final Color? backgroundColor;
 
   /// The style of the channel name in the [StreamThreadListTile] widget.
+  ///
+  /// Falls back to [StreamTextTheme.captionEmphasis] with
+  /// [StreamColorScheme.textTertiary].
   final TextStyle? threadChannelNameStyle;
 
-  /// The style of the message the thread is replying to in the
+  /// The style of the whole root message preview in the
   /// [StreamThreadListTile] widget.
+  ///
+  /// To style only parts of it, consider [messagePreviewTextTheme]. Falls
+  /// back to [StreamTextTheme.bodyDefault] with
+  /// [StreamColorScheme.textPrimary].
   final TextStyle? threadReplyToMessageStyle;
+
+  /// The theme for styling parts of the root message preview differently
+  /// from the rest.
+  ///
+  /// Takes precedence over an enclosing [StreamMessagePreviewTextTheme] and
+  /// the app-wide one. The sender prefix and a deleted message default to
+  /// [StreamColorScheme.textSecondary]. A thread list shows no draft prefix.
+  final StreamMessagePreviewTextThemeData? messagePreviewTextTheme;
 
   /// The style of the latest reply author username in the
   /// [StreamThreadListTile] widget.
   final TextStyle? threadLatestReplyUsernameStyle;
 
   /// The style of the latest reply message in the [StreamThreadListTile].
-  /// widget.
   final TextStyle? threadLatestReplyMessageStyle;
 
   /// The style of the latest reply timestamp in the [StreamThreadListTile].
+  ///
+  /// Falls back to [StreamTextTheme.captionDefault] with
+  /// [StreamColorScheme.textTertiary].
   final TextStyle? threadLatestReplyTimestampStyle;
 
   /// Formatter for the latest reply timestamp.
   ///
-  /// If null, uses the default date formatting.
+  /// If null, uses [formatRecentDateTime].
   ///
   /// Example:
   /// ```dart
@@ -104,6 +130,12 @@ class StreamThreadListTileThemeData with Diagnosticable {
   /// ```
   final DateFormatter? threadLatestReplyTimestampFormatter;
 
+  /// The style of the reply count label in the thread footer.
+  ///
+  /// Falls back to [StreamTextTheme.captionEmphasis] with
+  /// [StreamColorScheme.textLink].
+  final TextStyle? threadReplyCountStyle;
+
   /// The style of the unread message count in the [StreamThreadListTile].
   final TextStyle? threadUnreadMessageCountStyle;
 
@@ -111,144 +143,10 @@ class StreamThreadListTileThemeData with Diagnosticable {
   /// [StreamThreadListTile].
   final Color? threadUnreadMessageCountBackgroundColor;
 
-  /// A copy of [StreamThreadListTileThemeData] with specified attributes
-  /// overridden.
-  StreamThreadListTileThemeData copyWith({
-    EdgeInsetsGeometry? padding,
-    Color? backgroundColor,
-    TextStyle? threadChannelNameStyle,
-    TextStyle? threadReplyToMessageStyle,
-    TextStyle? threadLatestReplyUsernameStyle,
-    TextStyle? threadLatestReplyMessageStyle,
-    TextStyle? threadLatestReplyTimestampStyle,
-    DateFormatter? threadLatestReplyTimestampFormatter,
-    TextStyle? threadUnreadMessageCountStyle,
-    Color? threadUnreadMessageCountBackgroundColor,
-  }) =>
-      StreamThreadListTileThemeData(
-        padding: padding ?? this.padding,
-        backgroundColor: backgroundColor ?? this.backgroundColor,
-        threadChannelNameStyle:
-            threadChannelNameStyle ?? this.threadChannelNameStyle,
-        threadReplyToMessageStyle:
-            threadReplyToMessageStyle ?? this.threadReplyToMessageStyle,
-        threadLatestReplyUsernameStyle: threadLatestReplyUsernameStyle ??
-            this.threadLatestReplyUsernameStyle,
-        threadLatestReplyMessageStyle:
-            threadLatestReplyMessageStyle ?? this.threadLatestReplyMessageStyle,
-        threadLatestReplyTimestampStyle: threadLatestReplyTimestampStyle ??
-            this.threadLatestReplyTimestampStyle,
-        threadLatestReplyTimestampFormatter:
-            threadLatestReplyTimestampFormatter ??
-                this.threadLatestReplyTimestampFormatter,
-        threadUnreadMessageCountStyle:
-            threadUnreadMessageCountStyle ?? this.threadUnreadMessageCountStyle,
-        threadUnreadMessageCountBackgroundColor:
-            threadUnreadMessageCountBackgroundColor ??
-                this.threadUnreadMessageCountBackgroundColor,
-      );
-
-  /// Merges this [StreamThreadListTileThemeData] with the [other].
-  StreamThreadListTileThemeData merge(
-    StreamThreadListTileThemeData? other,
-  ) {
-    if (other == null) return this;
-    return copyWith(
-      padding: other.padding,
-      backgroundColor: other.backgroundColor,
-      threadChannelNameStyle: other.threadChannelNameStyle,
-      threadReplyToMessageStyle: other.threadReplyToMessageStyle,
-      threadLatestReplyUsernameStyle: other.threadLatestReplyUsernameStyle,
-      threadLatestReplyMessageStyle: other.threadLatestReplyMessageStyle,
-      threadLatestReplyTimestampStyle: other.threadLatestReplyTimestampStyle,
-      threadLatestReplyTimestampFormatter:
-          other.threadLatestReplyTimestampFormatter,
-      threadUnreadMessageCountStyle: other.threadUnreadMessageCountStyle,
-      threadUnreadMessageCountBackgroundColor:
-          other.threadUnreadMessageCountBackgroundColor,
-    );
-  }
-
   /// Linearly interpolate between two [StreamThreadListTileThemeData].
-  StreamThreadListTileThemeData lerp(
+  static StreamThreadListTileThemeData? lerp(
     StreamThreadListTileThemeData? a,
     StreamThreadListTileThemeData? b,
     double t,
-  ) =>
-      StreamThreadListTileThemeData(
-        padding: EdgeInsetsGeometry.lerp(a?.padding, b?.padding, t),
-        backgroundColor: Color.lerp(a?.backgroundColor, b?.backgroundColor, t),
-        threadChannelNameStyle: TextStyle.lerp(
-          a?.threadChannelNameStyle,
-          b?.threadChannelNameStyle,
-          t,
-        ),
-        threadReplyToMessageStyle: TextStyle.lerp(
-          a?.threadReplyToMessageStyle,
-          b?.threadReplyToMessageStyle,
-          t,
-        ),
-        threadLatestReplyUsernameStyle: TextStyle.lerp(
-          a?.threadLatestReplyUsernameStyle,
-          b?.threadLatestReplyUsernameStyle,
-          t,
-        ),
-        threadLatestReplyMessageStyle: TextStyle.lerp(
-          a?.threadLatestReplyMessageStyle,
-          b?.threadLatestReplyMessageStyle,
-          t,
-        ),
-        threadLatestReplyTimestampStyle: TextStyle.lerp(
-          a?.threadLatestReplyTimestampStyle,
-          b?.threadLatestReplyTimestampStyle,
-          t,
-        ),
-        threadLatestReplyTimestampFormatter: t < 0.5
-            ? a?.threadLatestReplyTimestampFormatter
-            : b?.threadLatestReplyTimestampFormatter,
-        threadUnreadMessageCountStyle: TextStyle.lerp(
-          a?.threadUnreadMessageCountStyle,
-          b?.threadUnreadMessageCountStyle,
-          t,
-        ),
-        threadUnreadMessageCountBackgroundColor: Color.lerp(
-          a?.threadUnreadMessageCountBackgroundColor,
-          b?.threadUnreadMessageCountBackgroundColor,
-          t,
-        ),
-      );
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is StreamThreadListTileThemeData &&
-          other.padding == padding &&
-          other.backgroundColor == backgroundColor &&
-          other.threadChannelNameStyle == threadChannelNameStyle &&
-          other.threadReplyToMessageStyle == threadReplyToMessageStyle &&
-          other.threadLatestReplyUsernameStyle ==
-              threadLatestReplyUsernameStyle &&
-          other.threadLatestReplyMessageStyle ==
-              threadLatestReplyMessageStyle &&
-          other.threadLatestReplyTimestampStyle ==
-              threadLatestReplyTimestampStyle &&
-          other.threadLatestReplyTimestampFormatter ==
-              threadLatestReplyTimestampFormatter &&
-          other.threadUnreadMessageCountStyle ==
-              threadUnreadMessageCountStyle &&
-          other.threadUnreadMessageCountBackgroundColor ==
-              threadUnreadMessageCountBackgroundColor;
-
-  @override
-  int get hashCode =>
-      padding.hashCode ^
-      backgroundColor.hashCode ^
-      threadChannelNameStyle.hashCode ^
-      threadReplyToMessageStyle.hashCode ^
-      threadLatestReplyUsernameStyle.hashCode ^
-      threadLatestReplyMessageStyle.hashCode ^
-      threadLatestReplyTimestampStyle.hashCode ^
-      threadLatestReplyTimestampFormatter.hashCode ^
-      threadUnreadMessageCountStyle.hashCode ^
-      threadUnreadMessageCountBackgroundColor.hashCode;
+  ) => _$StreamThreadListTileThemeData.lerp(a, b, t);
 }

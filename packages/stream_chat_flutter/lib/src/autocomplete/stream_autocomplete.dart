@@ -2,13 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_portal/flutter_portal.dart';
-import 'package:stream_chat_flutter/stream_chat_flutter.dart';
+import '../../stream_chat_flutter.dart';
 
 export 'stream_command_autocomplete_options.dart';
 export 'stream_mention_autocomplete_options.dart';
-
-/// {@macro stream_chat_flutter.StreamMessageInputController}
-typedef StreamMessageEditingController = StreamMessageInputController;
 
 /// Positions the [AutocompleteTrigger] options around the [TextField] or
 /// [TextFormField] that triggered the autocomplete.
@@ -45,11 +42,12 @@ enum OptionsAlignment {
 /// See also:
 ///
 ///   * [StreamAutocomplete.fieldViewBuilder], which is of this type.
-typedef StreamAutocompleteFieldViewBuilder = Widget Function(
-  BuildContext context,
-  StreamMessageEditingController messageEditingController,
-  FocusNode focusNode,
-);
+typedef StreamAutocompleteFieldViewBuilder =
+    Widget Function(
+      BuildContext context,
+      StreamMessageComposerController messageComposerController,
+      FocusNode focusNode,
+    );
 
 /// The type of the [StreamAutocompleteTrigger] callback which returns a
 /// [Widget] that displays the specified [options].
@@ -57,11 +55,12 @@ typedef StreamAutocompleteFieldViewBuilder = Widget Function(
 /// See also:
 ///
 ///   * [StreamAutocompleteTrigger.optionsViewBuilder], which is of this type.
-typedef StreamAutocompleteOptionsViewBuilder = Widget Function(
-  BuildContext context,
-  StreamAutocompleteQuery autocompleteQuery,
-  StreamMessageEditingController messageEditingController,
-);
+typedef StreamAutocompleteOptionsViewBuilder =
+    Widget Function(
+      BuildContext context,
+      StreamAutocompleteQuery autocompleteQuery,
+      StreamMessageComposerController messageComposerController,
+    );
 
 /// The query to determine the autocomplete options.
 class StreamAutocompleteQuery {
@@ -148,8 +147,7 @@ class StreamAutocompleteTrigger {
     final cursorPosition = textEditingValue.selection.baseOffset;
 
     // Find the first [trigger] location before the input cursor.
-    final firstTriggerIndexBeforeCursor =
-        text.substring(0, cursorPosition).lastIndexOf(trigger);
+    final firstTriggerIndexBeforeCursor = text.substring(0, cursorPosition).lastIndexOf(trigger);
 
     // If the [trigger] is not found before the cursor, then it's not a trigger.
     if (firstTriggerIndexBeforeCursor == -1) return null;
@@ -164,9 +162,7 @@ class StreamAutocompleteTrigger {
     // valid examples: "@user", "Hello @user"
     // invalid examples: "Hello@user"
     final textBeforeTrigger = text.substring(0, firstTriggerIndexBeforeCursor);
-    if (triggerOnlyAfterSpace &&
-        textBeforeTrigger.isNotEmpty &&
-        !textBeforeTrigger.endsWith(' ')) {
+    if (triggerOnlyAfterSpace && textBeforeTrigger.isNotEmpty && !textBeforeTrigger.endsWith(' ')) {
       return null;
     }
 
@@ -204,19 +200,19 @@ class StreamAutocomplete extends StatefulWidget {
   const StreamAutocomplete({
     super.key,
     this.focusNode,
-    this.messageEditingController,
+    this.messageComposerController,
     required this.autocompleteTriggers,
     this.fieldViewBuilder = _defaultFieldViewBuilder,
     this.optionsAlignment = OptionsAlignment.above,
     this.debounceDuration = const Duration(milliseconds: 300),
-  }) : assert((focusNode == null) == (messageEditingController == null), '');
+  }) : assert((focusNode == null) == (messageComposerController == null), '');
 
   /// The triggers that trigger autocomplete.
   final Iterable<StreamAutocompleteTrigger> autocompleteTriggers;
 
   /// Builds the field whose input is used to get the options.
   ///
-  /// Pass the provided [StreamMessageEditingController] to the field built
+  /// Pass the provided [StreamMessageComposerController] to the field built
   /// here so that StreamAutocomplete can listen for changes.
   final StreamAutocompleteFieldViewBuilder fieldViewBuilder;
 
@@ -230,17 +226,17 @@ class StreamAutocomplete extends StatefulWidget {
   /// When following this pattern, [fieldViewBuilder] can return
   /// `EmptyWidget()` so that nothing is drawn where the text field would
   /// normally be. A separate text field can be created elsewhere, and a
-  /// FocusNode and StreamMessageEditingController can be passed both to that
+  /// FocusNode and StreamMessageComposerController can be passed both to that
   /// text field and to StreamAutocomplete.
   ///
-  /// If this parameter is not null, then [messageEditingController] must also
+  /// If this parameter is not null, then [messageComposerController] must also
   /// be not null.
   final FocusNode? focusNode;
 
-  /// The [StreamMessageEditingController] that is used for the text field.
+  /// The [StreamMessageComposerController] that is used for the text field.
   ///
   /// If this parameter is not null, then [focusNode] must also be not null.
-  final StreamMessageEditingController? messageEditingController;
+  final StreamMessageComposerController? messageComposerController;
 
   /// The alignment of the options.
   ///
@@ -248,19 +244,19 @@ class StreamAutocomplete extends StatefulWidget {
   final OptionsAlignment optionsAlignment;
 
   /// The duration of the debounce period for the
-  /// [StreamMessageEditingController].
+  /// [StreamMessageComposerController].
   ///
   /// The default value is [300ms].
   final Duration debounceDuration;
 
   static Widget _defaultFieldViewBuilder(
     BuildContext context,
-    StreamMessageEditingController messageEditingController,
+    StreamMessageComposerController messageComposerController,
     FocusNode focusNode,
   ) {
     return _StreamAutocompleteField(
       focusNode: focusNode,
-      messageEditingController: messageEditingController,
+      messageComposerController: messageComposerController,
     );
   }
 
@@ -276,7 +272,7 @@ class StreamAutocomplete extends StatefulWidget {
 }
 
 class _StreamAutocompleteState extends State<StreamAutocomplete> {
-  late StreamMessageEditingController _messageEditingController;
+  late StreamMessageComposerController _messageComposerController;
   late FocusNode _focusNode;
 
   StreamAutocompleteQuery? _currentQuery;
@@ -285,12 +281,12 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
   bool _hideOptions = false;
   String _lastFieldText = '';
 
+  // A tap on the options is not a tap outside the field.
+  final _tapRegionGroupId = Object();
+
   // True if the state indicates that the options should be visible.
   bool get _shouldShowOptions {
-    return !_hideOptions &&
-        _focusNode.hasFocus &&
-        _currentQuery != null &&
-        _currentTrigger != null;
+    return !_hideOptions && _focusNode.hasFocus && _currentQuery != null && _currentTrigger != null;
   }
 
   /// Accepts and replaces the current query with the given [option] and closes
@@ -308,7 +304,7 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
     if (query == null || trigger == null) return;
 
     final querySelection = query.selection;
-    final text = _messageEditingController.text;
+    final text = _messageComposerController.text;
 
     var start = querySelection.baseOffset;
     if (!keepTrigger) start -= 1;
@@ -328,7 +324,7 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
     final newText = text.replaceRange(start, end, option);
     final newSelection = TextSelection.collapsed(offset: selectionOffset);
 
-    _messageEditingController.textEditingValue = TextEditingValue(
+    _messageComposerController.textEditingValue = TextEditingValue(
       text: newText,
       selection: newSelection,
     );
@@ -375,11 +371,11 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
     return null;
   }
 
-  // Called when _textEditingController changes.
+  // Called when _messageComposerController changes.
   late final _onChangedField = debounce(
     () {
-      final messageValue = _messageEditingController.message;
-      final textEditingValue = _messageEditingController.textEditingValue;
+      final messageValue = _messageComposerController.message;
+      final textEditingValue = _messageComposerController.textEditingValue;
 
       // If the content has not changed, then there is nothing to do.
       if (textEditingValue.text == _lastFieldText) return;
@@ -419,28 +415,28 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
     if (mounted) setState(() {});
   }
 
-  // Handle a potential change in textEditingController by properly disposing of
-  // the old one and setting up the new one, if needed.
+  // Handle a potential change in messageComposerController by properly
+  // disposing of the old one and setting up the new one, if needed.
   void _updateTextEditingController(
-    StreamMessageEditingController? old,
-    StreamMessageEditingController? current,
+    StreamMessageComposerController? old,
+    StreamMessageComposerController? current,
   ) {
     if ((old == null && current == null) || old == current) {
       return;
     }
     if (old == null) {
-      _messageEditingController
+      _messageComposerController
         ..removeListener(_onChangedField)
         ..dispose();
-      _messageEditingController = current!;
+      _messageComposerController = current!;
     } else if (current == null) {
-      _messageEditingController.removeListener(_onChangedField);
-      _messageEditingController = StreamMessageEditingController();
+      _messageComposerController.removeListener(_onChangedField);
+      _messageComposerController = StreamMessageComposerController();
     } else {
-      _messageEditingController.removeListener(_onChangedField);
-      _messageEditingController = current;
+      _messageComposerController.removeListener(_onChangedField);
+      _messageComposerController = current;
     }
-    _messageEditingController.addListener(_onChangedField);
+    _messageComposerController.addListener(_onChangedField);
   }
 
   // Handle a potential change in focusNode by properly disposing of the old one
@@ -467,9 +463,8 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
   @override
   void initState() {
     super.initState();
-    _messageEditingController =
-        widget.messageEditingController ?? StreamMessageEditingController();
-    _messageEditingController.addListener(_onChangedField);
+    _messageComposerController = widget.messageComposerController ?? StreamMessageComposerController();
+    _messageComposerController.addListener(_onChangedField);
     _focusNode = widget.focusNode ?? FocusNode();
     _focusNode.addListener(_onChangedFocus);
   }
@@ -478,24 +473,25 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
   void didUpdateWidget(StreamAutocomplete oldWidget) {
     super.didUpdateWidget(oldWidget);
     _updateTextEditingController(
-      oldWidget.messageEditingController,
-      widget.messageEditingController,
+      oldWidget.messageComposerController,
+      widget.messageComposerController,
     );
     _updateFocusNode(oldWidget.focusNode, widget.focusNode);
   }
 
   @override
   void dispose() {
-    _messageEditingController.removeListener(_onChangedField);
-    if (widget.messageEditingController == null) {
-      _messageEditingController.dispose();
+    _messageComposerController.removeListener(_onChangedField);
+    if (widget.messageComposerController == null) {
+      _messageComposerController.dispose();
     }
     _focusNode.removeListener(_onChangedFocus);
     if (widget.focusNode == null) {
       _focusNode.dispose();
     }
     _onChangedField.cancel();
-    closeSuggestions();
+    _currentQuery = null;
+    _currentTrigger = null;
     super.dispose();
   }
 
@@ -507,11 +503,14 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
         final anchor = widget.optionsAlignment._toAnchor();
         final shouldShowOptions = _shouldShowOptions;
         final optionViewBuilder = shouldShowOptions
-            ? TextFieldTapRegion(
-                child: _currentTrigger!.optionsViewBuilder(
-                  context,
-                  _currentQuery!,
-                  _messageEditingController,
+            ? TapRegion(
+                groupId: _tapRegionGroupId,
+                child: TextFieldTapRegion(
+                  child: _currentTrigger!.optionsViewBuilder(
+                    context,
+                    _currentQuery!,
+                    _messageComposerController,
+                  ),
                 ),
               )
             : null;
@@ -520,10 +519,17 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
           anchor: anchor,
           visible: shouldShowOptions,
           portalFollower: optionViewBuilder,
-          child: widget.fieldViewBuilder(
-            context,
-            _messageEditingController,
-            _focusNode,
+          child: TapRegion(
+            groupId: _tapRegionGroupId,
+            enabled: shouldShowOptions,
+            // Hide the options the way losing focus does, for a touch outside
+            // that keeps the field focused.
+            onTapOutside: (_) => setState(() => _hideOptions = true),
+            child: widget.fieldViewBuilder(
+              context,
+              _messageComposerController,
+              _focusNode,
+            ),
           ),
         );
       },
@@ -535,17 +541,17 @@ class _StreamAutocompleteState extends State<StreamAutocomplete> {
 class _StreamAutocompleteField extends StatelessWidget {
   const _StreamAutocompleteField({
     required this.focusNode,
-    required this.messageEditingController,
+    required this.messageComposerController,
   });
 
   final FocusNode focusNode;
 
-  final StreamMessageEditingController messageEditingController;
+  final StreamMessageComposerController messageComposerController;
 
   @override
   Widget build(BuildContext context) {
     return StreamMessageTextField(
-      controller: messageEditingController,
+      controller: messageComposerController,
       focusNode: focusNode,
     );
   }
@@ -555,7 +561,76 @@ const _kDefaultStreamAutocompleteOptionsShape = RoundedRectangleBorder(
   borderRadius: BorderRadius.all(Radius.circular(8)),
 );
 
+/// Defines the visual style of autocomplete options overlay.
+enum AutocompleteOptionsStyle {
+  /// Flat overlay with no elevation or margin.
+  ///
+  /// Used for overlays that appear directly above the composer (default).
+  fixed,
+
+  /// Floating card with elevation and rounded corners.
+  ///
+  /// Used for overlays that appear in open space away from the composer.
+  floating,
+}
+
+/// Resolves visual parameters for a [StreamAutocompleteOptions] widget based
+/// on [AutocompleteOptionsStyle].
+extension AutocompleteOptionsStyleX on AutocompleteOptionsStyle {
+  /// Returns the elevation, margin, and shape for [StreamAutocompleteOptions].
+  ///
+  /// [borderColor] is used for the top border (fixed) or outline (floating).
+  ({double elevation, EdgeInsetsGeometry margin, ShapeBorder shape}) resolve(
+    Color borderColor,
+  ) {
+    return switch (this) {
+      AutocompleteOptionsStyle.fixed => (
+        elevation: 0.0,
+        margin: EdgeInsets.zero,
+        shape: _TopBorderShape(BorderSide(color: borderColor)),
+      ),
+      AutocompleteOptionsStyle.floating => (
+        elevation: 4.0,
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(24)),
+          side: BorderSide(color: borderColor),
+        ),
+      ),
+    };
+  }
+}
+
+/// A [ShapeBorder] that paints only a top border, with no rounding or sides.
+class _TopBorderShape extends ShapeBorder {
+  const _TopBorderShape(this.top);
+
+  final BorderSide top;
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.only(top: top.width);
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) => Path()..addRect(rect);
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    final paint = top.toPaint()..strokeCap = StrokeCap.square;
+    final y = rect.top + top.width / 2;
+    canvas.drawLine(Offset(rect.left, y), Offset(rect.right, y), paint);
+  }
+
+  @override
+  ShapeBorder scale(double t) => _TopBorderShape(top.scale(t));
+}
+
 /// A helper widget used to show the options of a [StreamAutocomplete].
+///
+/// Its options stay clear of the display cutouts and system bars at the sides
+/// of the screen, as reported by [MediaQuery]'s padding.
 class StreamAutocompleteOptions<T extends Object> extends StatelessWidget {
   /// Creates a [StreamAutocompleteOptions] widget.
   const StreamAutocompleteOptions({
@@ -573,7 +648,7 @@ class StreamAutocompleteOptions<T extends Object> extends StatelessWidget {
 
   /// The background color of the options card.
   ///
-  /// Defaults to [StreamColorTheme.barsBg].
+  /// Defaults to [context.streamColorScheme.backgroundElevation1].
   final Color? color;
 
   /// The elevation of the options card.
@@ -610,35 +685,33 @@ class StreamAutocompleteOptions<T extends Object> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.of(context).size.height;
-    final colorTheme = StreamChatTheme.of(context).colorTheme;
+    final height = MediaQuery.sizeOf(context).height;
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (headerBuilder != null) headerBuilder!(context),
+        LimitedBox(
+          maxHeight: maxHeight ?? height * 0.5,
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            itemCount: options.length,
+            itemBuilder: (context, index) {
+              final option = options.elementAt(index);
+              return optionBuilder(context, option);
+            },
+          ),
+        ),
+      ],
+    );
+
     return Card(
       margin: margin,
       elevation: elevation,
-      color: color ?? colorTheme.barsBg,
+      color: color ?? context.streamColorScheme.backgroundElevation1,
       shape: shape,
       clipBehavior: clipBehavior,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (headerBuilder != null) ...[
-            headerBuilder!(context),
-            Divider(height: 0, color: colorTheme.borders),
-          ],
-          LimitedBox(
-            maxHeight: maxHeight ?? height * 0.5,
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              itemCount: options.length,
-              itemBuilder: (context, index) {
-                final option = options.elementAt(index);
-                return optionBuilder(context, option);
-              },
-            ),
-          ),
-        ],
-      ),
+      child: StreamSafeArea(top: false, bottom: false, child: content),
     );
   }
 }

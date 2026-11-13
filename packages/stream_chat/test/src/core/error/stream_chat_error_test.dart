@@ -3,6 +3,11 @@ import 'package:stream_chat/src/core/api/responses.dart';
 import 'package:stream_chat/src/core/error/error.dart';
 import 'package:test/test.dart';
 
+DioException _dioException(DioExceptionType type) => DioException(
+  requestOptions: RequestOptions(path: 'test-path'),
+  type: type,
+);
+
 void main() {
   group('StreamChatError', () {
     test('should match if message is same', () {
@@ -45,8 +50,13 @@ void main() {
 
       expect(
         error.toString(),
-        'WebSocketError(message: $message, data: $data)',
+        'StreamWebSocketError(code: ${data.code}, message: $message, data: $data)',
       );
+    });
+
+    test('`.toString` omits code when absent', () {
+      const error = StreamWebSocketError('boom');
+      expect(error.toString(), 'StreamWebSocketError(message: boom)');
     });
   });
 
@@ -92,7 +102,8 @@ void main() {
       const statusCode = 666;
       const message = 'test-error-message';
       final options = RequestOptions(path: 'test-path');
-      const data = '''
+      const data =
+          '''
       {
         "code": $code,
         "StatusCode": $statusCode,
@@ -114,6 +125,29 @@ void main() {
       expect(error.data?.code, code);
       expect(error.data?.statusCode, statusCode);
       expect(error.data?.message, message);
+    });
+
+    test('.fromDioException with non-JSON String data falls back to '
+        'statusMessage', () {
+      const statusCode = 504;
+      const statusMessage = 'Gateway Timeout';
+      const body = 'upstream request timeout';
+      final options = RequestOptions(path: 'test-path');
+      final dioError = DioException(
+        requestOptions: options,
+        response: Response(
+          requestOptions: options,
+          statusCode: statusCode,
+          statusMessage: statusMessage,
+          data: body,
+        ),
+      );
+      final error = StreamChatNetworkError.fromDioException(dioError);
+      expect(error, isNotNull);
+      expect(error.code, -1);
+      expect(error.message, statusMessage);
+      expect(error.statusCode, statusCode);
+      expect(error.data, isNull);
     });
 
     test('.fromDioException with null data and existing response message', () {
@@ -181,6 +215,74 @@ void main() {
       expect(error.isRetriable, isTrue);
     });
 
+    group('`.isRetriable` with a server response', () {
+      StreamChatNetworkError errorWithStatus(int statusCode) {
+        return StreamChatNetworkError.raw(
+          code: -1,
+          statusCode: statusCode,
+          message: 'error',
+          data: ErrorResponse()..statusCode = statusCode,
+        );
+      }
+
+      for (final statusCode in [408, 429, 500, 503]) {
+        test('is true for status code $statusCode', () {
+          expect(errorWithStatus(statusCode).isRetriable, isTrue);
+        });
+      }
+
+      for (final statusCode in [400, 403, 404]) {
+        test('is false for status code $statusCode', () {
+          expect(errorWithStatus(statusCode).isRetriable, isFalse);
+        });
+      }
+    });
+
+    test('`.isMessageAlreadyExistsError` should return true for a duplicate message id rejection', () {
+      const message = 'SendMessage failed with error: "a message with ID abc already exists"';
+      final error = StreamChatNetworkError.raw(
+        code: ChatErrorCode.inputError.code,
+        statusCode: 400,
+        message: message,
+        data: ErrorResponse()
+          ..code = ChatErrorCode.inputError.code
+          ..message = message
+          ..statusCode = 400,
+      );
+
+      expect(error.isMessageAlreadyExistsError, isTrue);
+    });
+
+    test('`.isMessageAlreadyExistsError` should return false for a poll option that already exists', () {
+      const message = 'poll option with text A already exists';
+      final error = StreamChatNetworkError.raw(
+        code: ChatErrorCode.inputError.code,
+        statusCode: 400,
+        message: message,
+        data: ErrorResponse()
+          ..code = ChatErrorCode.inputError.code
+          ..message = message
+          ..statusCode = 400,
+      );
+
+      expect(error.isMessageAlreadyExistsError, isFalse);
+    });
+
+    test('`.isMessageAlreadyExistsError` should return false for the same text with another error code', () {
+      const message = 'SendMessage failed with error: "a message with ID abc already exists"';
+      final error = StreamChatNetworkError.raw(
+        code: ChatErrorCode.notAllowed.code,
+        statusCode: 403,
+        message: message,
+        data: ErrorResponse()
+          ..code = ChatErrorCode.notAllowed.code
+          ..message = message
+          ..statusCode = 403,
+      );
+
+      expect(error.isMessageAlreadyExistsError, isFalse);
+    });
+
     test('`.toString`', () {
       const errorCode = ChatErrorCode.tokenExpired;
       final error = StreamChatNetworkError(errorCode);
@@ -190,6 +292,92 @@ void main() {
         'code: ${errorCode.code}, '
         'message: ${errorCode.message})',
       );
+    });
+
+    test('`.toString` includes the transport type when known', () {
+      final error = StreamChatNetworkError.fromDioException(
+        DioException(
+          requestOptions: RequestOptions(path: '/'),
+          type: DioExceptionType.connectionError,
+        ),
+      );
+
+      expect(error.toString(), contains('type: connectionError'));
+    });
+
+    group('.type from .fromDioException maps dio types 1:1', () {
+      const cases = {
+        DioExceptionType.connectionError: StreamChatNetworkErrorType.connectionError,
+        DioExceptionType.connectionTimeout: StreamChatNetworkErrorType.connectionTimeout,
+        DioExceptionType.sendTimeout: StreamChatNetworkErrorType.sendTimeout,
+        DioExceptionType.receiveTimeout: StreamChatNetworkErrorType.receiveTimeout,
+        DioExceptionType.transformTimeout: StreamChatNetworkErrorType.transformTimeout,
+        DioExceptionType.badResponse: StreamChatNetworkErrorType.badResponse,
+        DioExceptionType.cancel: StreamChatNetworkErrorType.cancel,
+        DioExceptionType.badCertificate: StreamChatNetworkErrorType.badCertificate,
+        DioExceptionType.unknown: StreamChatNetworkErrorType.unknown,
+      };
+
+      for (final MapEntry(key: dioType, value: expected) in cases.entries) {
+        test('$dioType -> $expected', () {
+          final error = StreamChatNetworkError.fromDioException(
+            _dioException(dioType),
+          );
+          expect(error.type, expected);
+        });
+      }
+    });
+
+    test('.type defaults to unknown for non-network errors', () {
+      final error = StreamChatNetworkError(ChatErrorCode.internalSystemError);
+      expect(error.type, StreamChatNetworkErrorType.unknown);
+    });
+
+    test('.type is part of equality', () {
+      final error = StreamChatNetworkError.raw(code: 1, message: 'msg');
+      final error2 = StreamChatNetworkError.raw(
+        code: 1,
+        message: 'msg',
+        type: StreamChatNetworkErrorType.connectionTimeout,
+      );
+
+      expect(error, isNot(error2));
+    });
+
+    group('.scheduledMessageErrorReason', () {
+      const reasons = {
+        114: ScheduledMessageErrorReason.scheduledMessagesDisabled,
+        115: ScheduledMessageErrorReason.scheduledAtTooSoon,
+        116: ScheduledMessageErrorReason.scheduledAtTooFar,
+        117: ScheduledMessageErrorReason.scheduledLimitChannel,
+        118: ScheduledMessageErrorReason.scheduledLimitUser,
+        119: ScheduledMessageErrorReason.scheduledMessageIdTaken,
+        120: ScheduledMessageErrorReason.scheduledMessageNotEditable,
+        121: ScheduledMessageErrorReason.scheduledMessageSending,
+        122: ScheduledMessageErrorReason.scheduledMessageConflict,
+        123: ScheduledMessageErrorReason.scheduledMessageAlreadySent,
+        124: ScheduledMessageErrorReason.scheduledMessageCanceled,
+      };
+
+      for (final MapEntry(key: code, value: reason) in reasons.entries) {
+        test('is $reason for code $code', () {
+          final error = StreamChatNetworkError.raw(code: code, message: 'Refused', statusCode: 400);
+
+          expect(error.scheduledMessageErrorReason, reason);
+        });
+      }
+
+      test('is null when the message does not exist', () {
+        final error = StreamChatNetworkError(ChatErrorCode.doesNotExist, statusCode: 404);
+
+        expect(error.scheduledMessageErrorReason, isNull);
+      });
+
+      test('is null for an error about something else', () {
+        final error = StreamChatNetworkError(ChatErrorCode.inputError, statusCode: 400);
+
+        expect(error.scheduledMessageErrorReason, isNull);
+      });
     });
   });
 }

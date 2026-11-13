@@ -1,6 +1,6 @@
 // coverage:ignore-file
 import 'package:drift/drift.dart';
-import 'package:stream_chat_persistence/src/converter/converter.dart';
+import '../converter/converter.dart';
 
 /// Represents a [Channels] table in [DriftChatDatabase].
 @DataClassName('ChannelEntity')
@@ -15,8 +15,7 @@ class Channels extends Table {
   TextColumn get cid => text()();
 
   /// List of user permissions on this channel
-  TextColumn get ownCapabilities =>
-      text().nullable().map(ListConverter<String>())();
+  TextColumn get ownCapabilities => text().nullable().map(ListConverter<String>())();
 
   /// The channel configuration data
   TextColumn get config => text().map(MapConverter())();
@@ -42,11 +41,17 @@ class Channels extends Table {
   /// The count of messages in this channel
   IntColumn get messageCount => integer().nullable()();
 
+  /// The number of members whose users are neither deactivated nor deleted.
+  IntColumn get activeMemberCount => integer().nullable()();
+
   /// The id of the user that created this channel
   TextColumn get createdById => text().nullable()();
 
   /// List of filter tags for this channel
   TextColumn get filterTags => text().nullable().map(ListConverter<String>())();
+
+  /// The team the channel belongs to
+  TextColumn get team => text().nullable()();
 
   /// Map of custom channel extraData
   TextColumn get extraData => text().nullable().map(MapConverter())();

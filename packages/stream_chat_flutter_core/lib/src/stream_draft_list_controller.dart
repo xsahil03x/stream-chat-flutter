@@ -3,8 +3,8 @@ import 'dart:math';
 
 import 'package:collection/collection.dart';
 import 'package:stream_chat/stream_chat.dart';
-import 'package:stream_chat_flutter_core/src/paged_value_notifier.dart';
-import 'package:stream_chat_flutter_core/src/stream_draft_list_event_handler.dart';
+import 'paged_value_notifier.dart';
+import 'stream_draft_list_event_handler.dart';
 
 /// The default channel page limit to load.
 const defaultDraftPagedLimit = 10;
@@ -34,10 +34,10 @@ class StreamDraftListController extends PagedValueNotifier<String, Draft> {
     this.filter,
     this.sort = defaultDraftListSort,
     this.limit = defaultDraftPagedLimit,
-  })  : _activeFilter = filter,
-        _activeSort = sort,
-        _eventHandler = eventHandler ?? StreamDraftListEventHandler(),
-        super(const PagedValue.loading());
+  }) : _activeFilter = filter,
+       _activeSort = sort,
+       _eventHandler = eventHandler ?? StreamDraftListEventHandler(),
+       super(const PagedValue.loading());
 
   /// Creates a [StreamThreadListController] from the passed [value].
   StreamDraftListController.fromValue(
@@ -47,9 +47,9 @@ class StreamDraftListController extends PagedValueNotifier<String, Draft> {
     this.filter,
     this.sort = defaultDraftListSort,
     this.limit = defaultDraftPagedLimit,
-  })  : _activeFilter = filter,
-        _activeSort = sort,
-        _eventHandler = eventHandler ?? StreamDraftListEventHandler();
+  }) : _activeFilter = filter,
+       _activeSort = sort,
+       _eventHandler = eventHandler ?? StreamDraftListEventHandler();
 
   /// The Stream client used to perform the queries.
   final StreamChatClient client;
@@ -94,11 +94,11 @@ class StreamDraftListController extends PagedValueNotifier<String, Draft> {
     super.value = switch (_activeSort) {
       null => newValue,
       final draftSort => newValue.maybeMap(
-          orElse: () => newValue,
-          (success) => success.copyWith(
-            items: success.items.sorted(draftSort.compare),
-          ),
+        orElse: () => newValue,
+        (success) => success.copyWith(
+          items: success.items.sorted(draftSort.compare),
         ),
+      ),
     };
   }
 
@@ -122,6 +122,7 @@ class StreamDraftListController extends PagedValueNotifier<String, Draft> {
         nextPageKey: nextKey,
       );
       // Start listening to events
+      if (disposed) return;
       _subscribeToDraftListEvents();
     } on StreamChatError catch (error) {
       value = PagedValue.error(error);
@@ -218,14 +219,7 @@ class StreamDraftListController extends PagedValueNotifier<String, Draft> {
     final currentDrafts = [
       ...currentItems.merge(
         [draft],
-        key: (draft) {
-          var predicate = draft.channelCid;
-          if (draft.parentId case final parentId?) {
-            predicate += parentId;
-          }
-
-          return predicate;
-        },
+        key: _draftKey,
         update: (original, updated) => updated,
       ),
     ];
@@ -240,16 +234,8 @@ class StreamDraftListController extends PagedValueNotifier<String, Draft> {
   /// Returns `true` if the draft is deleted successfully. Otherwise, `false`.
   bool deleteDraft(Draft draft) {
     final currentDrafts = [...currentItems];
-    final removeIndex = currentDrafts.indexWhere(
-      (it) {
-        var predicate = it.channelCid == draft.channelCid;
-        if (draft.parentId case final parentId?) {
-          predicate &= it.parentId == parentId;
-        }
-
-        return predicate;
-      },
-    );
+    final draftKey = _draftKey(draft);
+    final removeIndex = currentDrafts.indexWhere((it) => _draftKey(it) == draftKey);
 
     if (removeIndex < 0) return false;
     currentDrafts.removeAt(removeIndex);
@@ -257,6 +243,8 @@ class StreamDraftListController extends PagedValueNotifier<String, Draft> {
     drafts = currentDrafts;
     return true;
   }
+
+  static (String, String?) _draftKey(Draft draft) => (draft.channelCid, draft.parentId);
 
   // Unsubscribes from all draft list events.
   void _unsubscribeFromDraftListEvents() {

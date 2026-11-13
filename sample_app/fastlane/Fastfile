@@ -1,0 +1,13 @@
+opt_out_usage
+
+def root_path
+  Dir.pwd.sub(/.*\Kfastlane/, '').sub(/.*\Kandroid/, '').sub(/.*\Kios/, '').sub(/.*\K\/\//, '')
+end
+
+lane :sh_on_root do |options|
+  Dir.chdir(root_path) { sh(options[:command]) }
+end
+
+lane :fetch_dependencies do
+  sh_on_root(command: "flutter pub get --suppress-analytics")
+end

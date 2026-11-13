@@ -13,11 +13,10 @@ void main() {
       test(
         'should throw if non-zero `offset` and `next` both are provided',
         () {
-          try {
-            PaginationParams(offset: 10, next: 'next-message-id');
-          } catch (e) {
-            expect(e, isA<AssertionError>());
-          }
+          expect(
+            () => PaginationParams(offset: 10, next: 'next-message-id'),
+            throwsA(isA<AssertionError>()),
+          );
         },
       );
 
@@ -69,6 +68,31 @@ void main() {
         expect(newParams.lessThan, newTestString);
         expect(newParams.lessThanOrEqual, newTestString);
         expect(newParams.idAround, newTestString);
+      });
+    });
+
+    group('ThreadOptions', () {
+      test('default', () {
+        const options = ThreadOptions();
+        final j = options.toJson();
+        expect(j, containsPair('watch', true));
+        expect(j, containsPair('reply_limit', 2));
+        expect(j, containsPair('participant_limit', 10));
+        expect(j, containsPair('member_limit', 10));
+      });
+
+      test('serializes provided values', () {
+        const options = ThreadOptions(
+          watch: false,
+          replyLimit: 5,
+          participantLimit: 20,
+          memberLimit: 20,
+        );
+        final j = options.toJson();
+        expect(j, containsPair('watch', false));
+        expect(j, containsPair('reply_limit', 5));
+        expect(j, containsPair('participant_limit', 20));
+        expect(j, containsPair('member_limit', 20));
       });
     });
   });

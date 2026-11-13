@@ -4,7 +4,6 @@ plugins {
     id "com.google.gms.google-services"
     id 'com.google.firebase.crashlytics'
     // END: FlutterFire Configuration
-    id "kotlin-android"
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
 }
@@ -15,7 +14,7 @@ android {
     // dependencies that require it until Flutter's bundled
     // compileSdkVersion catches up.
     compileSdkVersion Math.max(flutter.compileSdkVersion, 36)
-    ndkVersion "27.0.12077973"
+    ndkVersion flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -23,13 +22,9 @@ android {
         coreLibraryDesugaringEnabled true
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
         applicationId "io.getstream.chat.android.flutter.sample"
-        minSdkVersion Math.max(flutter.minSdkVersion, 23)
+        minSdkVersion Math.max(flutter.minSdkVersion, 24)
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
@@ -56,6 +51,12 @@ android {
         variant.outputs.all {
             outputFileName = "flutter-sample-app.apk"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

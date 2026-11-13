@@ -2,6 +2,11 @@
 *.class
 *.log
 *.pyc
+# e2e: the cloned mock server, Allure results and CLI, and the generated batch entrypoint
+stream-chat-test-mock-server/
+allure-results/
+allurectl
+/e2e_app/integration_test/e2e_batch.g.dart
 *.swp
 .DS_Store
 .atom/
@@ -34,8 +39,10 @@ coverage_helper_test.dart
 **/doc/api/
 pubspec.lock
 pubspec_overrides.yaml
+devtools_options.yaml
 flutter_export_environment.sh
 generated_plugin_registrant.*
+generated_plugins.cmake
 GeneratedPluginRegistrant.*
 
 # Android related
@@ -66,9 +73,11 @@ GeneratedPluginRegistrant.*
 **/ios/**/xcuserdata
 **/ios/.generated/
 **/ios/Flutter/App.framework
+**/ios/Flutter/ephemeral
 **/ios/Flutter/Flutter.framework
 **/ios/Flutter/Flutter.podspec
 **/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/Signing.xcconfig
 **/ios/Flutter/app.flx
 **/ios/Flutter/app.zip
 **/ios/Flutter/flutter_assets/
@@ -77,6 +86,7 @@ GeneratedPluginRegistrant.*
 **/ios/Runner/GeneratedPluginRegistrant.*
 **/ios/Flutter/ephemeral/**
 Podfile.lock
+**/xcshareddata/swiftpm/Package.resolved
 
 # Exceptions to iOS rules
 !**/ios/**/default.mode1v3

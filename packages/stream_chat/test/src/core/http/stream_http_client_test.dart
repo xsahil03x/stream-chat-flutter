@@ -17,9 +17,9 @@ import '../../mocks.dart';
 
 void main() {
   Response successResponse(String path) => Response(
-        requestOptions: RequestOptions(path: path),
-        statusCode: 200,
-      );
+    requestOptions: RequestOptions(path: path),
+    statusCode: 200,
+  );
 
   DioException throwableError(
     String path, {
@@ -53,19 +53,14 @@ void main() {
     const apiKey = 'api-key';
     final client = StreamHttpClient(apiKey);
 
-    expect(
-        client.httpClient.interceptors
-            .whereType<AdditionalHeadersInterceptor>()
-            .length,
-        1);
+    expect(client.httpClient.interceptors.whereType<AdditionalHeadersInterceptor>().length, 1);
   });
 
   test('AuthInterceptor should be added if tokenManager is provided', () {
     const apiKey = 'api-key';
     final client = StreamHttpClient(apiKey, tokenManager: TokenManager());
 
-    expect(
-        client.httpClient.interceptors.whereType<AuthInterceptor>().length, 1);
+    expect(client.httpClient.interceptors.whereType<AuthInterceptor>().length, 1);
   });
 
   test(
@@ -78,9 +73,7 @@ void main() {
       );
 
       expect(
-        client.httpClient.interceptors
-            .whereType<ConnectionIdInterceptor>()
-            .length,
+        client.httpClient.interceptors.whereType<ConnectionIdInterceptor>().length,
         1,
       );
     },
@@ -135,9 +128,10 @@ void main() {
       final logger = MockLogger();
       final client = StreamHttpClient(apiKey, logger: logger);
 
-      try {
-        await client.get('path');
-      } catch (_) {}
+      await expectLater(
+        client.get('path'),
+        throwsA(isA<StreamChatNetworkError>()),
+      );
 
       verify(() => logger.info(any())).called(greaterThan(0));
     });
@@ -147,9 +141,10 @@ void main() {
       final logger = MockLogger();
       final client = StreamHttpClient(apiKey, logger: logger);
 
-      try {
-        await client.get('path');
-      } catch (_) {}
+      await expectLater(
+        client.get('path'),
+        throwsA(isA<StreamChatNetworkError>()),
+      );
 
       verify(() => logger.severe(any())).called(greaterThan(0));
     });
@@ -157,17 +152,18 @@ void main() {
 
   test('`.close` should close the dio client', () async {
     final client = StreamHttpClient('api-key')..close(force: true);
-    try {
-      await client.get('path');
-    } on StreamChatNetworkError catch (e) {
-      expect(e, isA<StreamChatNetworkError>());
-      expect(
-        e.message,
-        "The connection errored: Dio can't establish a new connection"
-        ' after it was closed. This indicates an error which most likely'
-        ' cannot be solved by the library.',
-      );
-    }
+    await expectLater(
+      client.get('path'),
+      throwsA(
+        isA<StreamChatNetworkError>().having(
+          (it) => it.message,
+          'message',
+          "The connection errored: Dio can't establish a new connection"
+              ' after it was closed. This indicates an error which most likely'
+              ' cannot be solved by the library.',
+        ),
+      ),
+    );
   });
 
   test('`.get` should return response successfully', () async {
@@ -175,10 +171,12 @@ void main() {
     final client = StreamHttpClient('api-key', dio: dio);
 
     const path = 'test-get-api-path';
-    when(() => dio.get(
-          path,
-          options: any(named: 'options'),
-        )).thenAnswer((_) async => successResponse(path));
+    when(
+      () => dio.get(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async => successResponse(path));
 
     final res = await client.get(path);
 
@@ -186,10 +184,12 @@ void main() {
     expect(res.statusCode, 200);
     expect(res.requestOptions.path, path);
 
-    verify(() => dio.get(
-          path,
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.get(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -202,22 +202,29 @@ void main() {
       path,
       error: StreamChatNetworkError(ChatErrorCode.internalSystemError),
     );
-    when(() => dio.get(
-          path,
-          options: any(named: 'options'),
-        )).thenThrow(error);
+    when(
+      () => dio.get(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).thenThrow(error);
 
-    try {
-      await client.get(path);
-    } catch (e) {
-      expect(e, isA<StreamChatNetworkError>());
-      expect(e, StreamChatNetworkError.fromDioException(error));
-    }
+    await expectLater(
+      client.get(path),
+      throwsA(
+        allOf(
+          isA<StreamChatNetworkError>(),
+          equals(StreamChatNetworkError.fromDioException(error)),
+        ),
+      ),
+    );
 
-    verify(() => dio.get(
-          path,
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.get(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -226,10 +233,12 @@ void main() {
     final client = StreamHttpClient('api-key', dio: dio);
 
     const path = 'test-post-api-path';
-    when(() => dio.post(
-          path,
-          options: any(named: 'options'),
-        )).thenAnswer((_) async => successResponse(path));
+    when(
+      () => dio.post(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async => successResponse(path));
 
     final res = await client.post(path);
 
@@ -237,10 +246,12 @@ void main() {
     expect(res.statusCode, 200);
     expect(res.requestOptions.path, path);
 
-    verify(() => dio.post(
-          path,
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.post(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -255,22 +266,29 @@ void main() {
         path,
         error: StreamChatNetworkError(ChatErrorCode.internalSystemError),
       );
-      when(() => dio.post(
-            path,
-            options: any(named: 'options'),
-          )).thenThrow(error);
+      when(
+        () => dio.post(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(error);
 
-      try {
-        await client.post(path);
-      } catch (e) {
-        expect(e, isA<StreamChatNetworkError>());
-        expect(e, StreamChatNetworkError.fromDioException(error));
-      }
+      await expectLater(
+        client.post(path),
+        throwsA(
+          allOf(
+            isA<StreamChatNetworkError>(),
+            equals(StreamChatNetworkError.fromDioException(error)),
+          ),
+        ),
+      );
 
-      verify(() => dio.post(
-            path,
-            options: any(named: 'options'),
-          )).called(1);
+      verify(
+        () => dio.post(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).called(1);
       verifyNoMoreInteractions(dio);
     },
   );
@@ -280,10 +298,12 @@ void main() {
     final client = StreamHttpClient('api-key', dio: dio);
 
     const path = 'test-delete-api-path';
-    when(() => dio.delete(
-          path,
-          options: any(named: 'options'),
-        )).thenAnswer((_) async => successResponse(path));
+    when(
+      () => dio.delete(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async => successResponse(path));
 
     final res = await client.delete(path);
 
@@ -291,10 +311,12 @@ void main() {
     expect(res.statusCode, 200);
     expect(res.requestOptions.path, path);
 
-    verify(() => dio.delete(
-          path,
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.delete(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -309,22 +331,29 @@ void main() {
         path,
         error: StreamChatNetworkError(ChatErrorCode.internalSystemError),
       );
-      when(() => dio.delete(
-            path,
-            options: any(named: 'options'),
-          )).thenThrow(error);
+      when(
+        () => dio.delete(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(error);
 
-      try {
-        await client.delete(path);
-      } catch (e) {
-        expect(e, isA<StreamChatNetworkError>());
-        expect(e, StreamChatNetworkError.fromDioException(error));
-      }
+      await expectLater(
+        client.delete(path),
+        throwsA(
+          allOf(
+            isA<StreamChatNetworkError>(),
+            equals(StreamChatNetworkError.fromDioException(error)),
+          ),
+        ),
+      );
 
-      verify(() => dio.delete(
-            path,
-            options: any(named: 'options'),
-          )).called(1);
+      verify(
+        () => dio.delete(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).called(1);
       verifyNoMoreInteractions(dio);
     },
   );
@@ -334,10 +363,12 @@ void main() {
     final client = StreamHttpClient('api-key', dio: dio);
 
     const path = 'test-patch-api-path';
-    when(() => dio.patch(
-          path,
-          options: any(named: 'options'),
-        )).thenAnswer((_) async => successResponse(path));
+    when(
+      () => dio.patch(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async => successResponse(path));
 
     final res = await client.patch(path);
 
@@ -345,10 +376,12 @@ void main() {
     expect(res.statusCode, 200);
     expect(res.requestOptions.path, path);
 
-    verify(() => dio.patch(
-          path,
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.patch(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -363,22 +396,29 @@ void main() {
         path,
         error: StreamChatNetworkError(ChatErrorCode.internalSystemError),
       );
-      when(() => dio.patch(
-            path,
-            options: any(named: 'options'),
-          )).thenThrow(error);
+      when(
+        () => dio.patch(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(error);
 
-      try {
-        await client.patch(path);
-      } catch (e) {
-        expect(e, isA<StreamChatNetworkError>());
-        expect(e, StreamChatNetworkError.fromDioException(error));
-      }
+      await expectLater(
+        client.patch(path),
+        throwsA(
+          allOf(
+            isA<StreamChatNetworkError>(),
+            equals(StreamChatNetworkError.fromDioException(error)),
+          ),
+        ),
+      );
 
-      verify(() => dio.patch(
-            path,
-            options: any(named: 'options'),
-          )).called(1);
+      verify(
+        () => dio.patch(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).called(1);
       verifyNoMoreInteractions(dio);
     },
   );
@@ -388,10 +428,12 @@ void main() {
     final client = StreamHttpClient('api-key', dio: dio);
 
     const path = 'test-put-api-path';
-    when(() => dio.put(
-          path,
-          options: any(named: 'options'),
-        )).thenAnswer((_) async => successResponse(path));
+    when(
+      () => dio.put(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async => successResponse(path));
 
     final res = await client.put(path);
 
@@ -399,10 +441,12 @@ void main() {
     expect(res.statusCode, 200);
     expect(res.requestOptions.path, path);
 
-    verify(() => dio.put(
-          path,
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.put(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -417,22 +461,29 @@ void main() {
         path,
         error: StreamChatNetworkError(ChatErrorCode.internalSystemError),
       );
-      when(() => dio.put(
-            path,
-            options: any(named: 'options'),
-          )).thenThrow(error);
+      when(
+        () => dio.put(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(error);
 
-      try {
-        await client.put(path);
-      } catch (e) {
-        expect(e, isA<StreamChatNetworkError>());
-        expect(e, StreamChatNetworkError.fromDioException(error));
-      }
+      await expectLater(
+        client.put(path),
+        throwsA(
+          allOf(
+            isA<StreamChatNetworkError>(),
+            equals(StreamChatNetworkError.fromDioException(error)),
+          ),
+        ),
+      );
 
-      verify(() => dio.put(
-            path,
-            options: any(named: 'options'),
-          )).called(1);
+      verify(
+        () => dio.put(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).called(1);
       verifyNoMoreInteractions(dio);
     },
   );
@@ -444,11 +495,13 @@ void main() {
     const path = 'test-delete-api-path';
     final file = MultipartFile.fromBytes([]);
 
-    when(() => dio.post(
-          path,
-          data: any(named: 'data'),
-          options: any(named: 'options'),
-        )).thenAnswer((_) async => successResponse(path));
+    when(
+      () => dio.post(
+        path,
+        data: any(named: 'data'),
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async => successResponse(path));
 
     final res = await client.postFile(path, file);
 
@@ -456,11 +509,13 @@ void main() {
     expect(res.statusCode, 200);
     expect(res.requestOptions.path, path);
 
-    verify(() => dio.post(
-          path,
-          data: any(named: 'data'),
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.post(
+        path,
+        data: any(named: 'data'),
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -477,24 +532,31 @@ void main() {
         path,
         error: StreamChatNetworkError(ChatErrorCode.internalSystemError),
       );
-      when(() => dio.post(
-            path,
-            data: any(named: 'data'),
-            options: any(named: 'options'),
-          )).thenThrow(error);
+      when(
+        () => dio.post(
+          path,
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(error);
 
-      try {
-        await client.postFile(path, file);
-      } catch (e) {
-        expect(e, isA<StreamChatNetworkError>());
-        expect(e, StreamChatNetworkError.fromDioException(error));
-      }
+      await expectLater(
+        client.postFile(path, file),
+        throwsA(
+          allOf(
+            isA<StreamChatNetworkError>(),
+            equals(StreamChatNetworkError.fromDioException(error)),
+          ),
+        ),
+      );
 
-      verify(() => dio.post(
-            path,
-            data: any(named: 'data'),
-            options: any(named: 'options'),
-          )).called(1);
+      verify(
+        () => dio.post(
+          path,
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+        ),
+      ).called(1);
       verifyNoMoreInteractions(dio);
     },
   );
@@ -504,10 +566,12 @@ void main() {
     final client = StreamHttpClient('api-key', dio: dio);
 
     const path = 'test-request-api-path';
-    when(() => dio.request(
-          path,
-          options: any(named: 'options'),
-        )).thenAnswer((_) async => successResponse(path));
+    when(
+      () => dio.request(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).thenAnswer((_) async => successResponse(path));
 
     final res = await client.request(path);
 
@@ -515,10 +579,12 @@ void main() {
     expect(res.statusCode, 200);
     expect(res.requestOptions.path, path);
 
-    verify(() => dio.request(
-          path,
-          options: any(named: 'options'),
-        )).called(1);
+    verify(
+      () => dio.request(
+        path,
+        options: any(named: 'options'),
+      ),
+    ).called(1);
     verifyNoMoreInteractions(dio);
   });
 
@@ -534,22 +600,26 @@ void main() {
         streamChatDioError: true,
         error: StreamChatNetworkError(ChatErrorCode.internalSystemError),
       );
-      when(() => dio.request(
-            path,
-            options: any(named: 'options'),
-          )).thenThrow(error);
+      when(
+        () => dio.request(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(error);
 
-      try {
-        await client.request(path);
-      } catch (e) {
-        expect(e, isA<StreamChatNetworkError>());
-        expect(e, error.error);
-      }
+      await expectLater(
+        client.request(path),
+        throwsA(
+          allOf(isA<StreamChatNetworkError>(), equals(error.error)),
+        ),
+      );
 
-      verify(() => dio.request(
-            path,
-            options: any(named: 'options'),
-          )).called(1);
+      verify(
+        () => dio.request(
+          path,
+          options: any(named: 'options'),
+        ),
+      ).called(1);
       verifyNoMoreInteractions(dio);
     },
   );

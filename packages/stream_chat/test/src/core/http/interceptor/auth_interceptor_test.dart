@@ -35,8 +35,7 @@ void main() {
       expect(queryParams.containsKey('user_id'), isFalse);
 
       final token = Token.development('test-user-id');
-      when(() => tokenManager.loadToken(refresh: any(named: 'refresh')))
-          .thenAnswer((_) async => token);
+      when(() => tokenManager.loadToken(refresh: any(named: 'refresh'))).thenAnswer((_) async => token);
 
       authInterceptor.onRequest(options, handler);
 
@@ -51,8 +50,7 @@ void main() {
       expect(updatedQueryParams.containsKey('user_id'), isTrue);
       expect(updatedQueryParams['user_id'], token.userId);
 
-      verify(() => tokenManager.loadToken(refresh: any(named: 'refresh')))
-          .called(1);
+      verify(() => tokenManager.loadToken(refresh: any(named: 'refresh'))).called(1);
       verifyNoMoreInteractions(tokenManager);
     },
   );
@@ -65,16 +63,22 @@ void main() {
 
       authInterceptor.onRequest(options, handler);
 
+      // The handler rejects with a private dio type, so capture the error and
+      // assert outside the `try`: a missing rejection leaves `caught` null.
+      Object? caught;
       try {
         await handler.future;
       } catch (e) {
-        // need to cast it as the type is private in dio
-        var error = (e as dynamic).data;
-        expect(error, isA<StreamChatDioError>());
-        error = (error as StreamChatDioError).error;
-        expect(error.code, ChatErrorCode.undefinedToken.code);
-        expect(error.message, ChatErrorCode.undefinedToken.message);
+        caught = e;
       }
+
+      // need to cast it as the type is private in dio
+      final dioError = (caught as dynamic)?.data;
+      expect(dioError, isA<StreamChatDioError>());
+
+      final error = (dioError as StreamChatDioError).error;
+      expect(error.code, ChatErrorCode.undefinedToken.code);
+      expect(error.message, ChatErrorCode.undefinedToken.message);
     },
   );
 
@@ -95,13 +99,14 @@ void main() {
     when(() => tokenManager.isStatic).thenReturn(false);
 
     final token = Token.development('test-user-id');
-    when(() => tokenManager.loadToken(refresh: true))
-        .thenAnswer((_) async => token);
+    when(() => tokenManager.loadToken(refresh: true)).thenAnswer((_) async => token);
 
-    when(() => client.fetch(options)).thenAnswer((_) async => Response(
-          requestOptions: options,
-          statusCode: 200,
-        ));
+    when(() => client.fetch(options)).thenAnswer(
+      (_) async => Response(
+        requestOptions: options,
+        statusCode: 200,
+      ),
+    );
 
     authInterceptor.onError(err, handler);
 
@@ -142,20 +147,21 @@ void main() {
       when(() => tokenManager.isStatic).thenReturn(false);
 
       final token = Token.development('test-user-id');
-      when(() => tokenManager.loadToken(refresh: true))
-          .thenAnswer((_) async => token);
+      when(() => tokenManager.loadToken(refresh: true)).thenAnswer((_) async => token);
 
       when(() => client.fetch(options)).thenThrow(err);
 
       authInterceptor.onError(err, handler);
 
+      Object? caught;
       try {
         await handler.future;
       } catch (e) {
-        // need to cast it as the type is private in dio
-        final error = (e as dynamic).data;
-        expect(error, isA<DioException>());
+        caught = e;
       }
+
+      // need to cast it as the type is private in dio
+      expect((caught as dynamic)?.data, isA<DioException>());
 
       verify(() => tokenManager.isStatic).called(1);
 
@@ -187,20 +193,61 @@ void main() {
 
       authInterceptor.onError(err, handler);
 
+      Object? caught;
       try {
         await handler.future;
       } catch (e) {
-        // need to cast it as the type is private in dio
-        final error = (e as dynamic).data;
-        expect(error, isA<DioException>());
-        final response = StreamChatNetworkError.fromDioException(error);
-        expect(response.errorCode, code);
+        caught = e;
       }
+
+      // need to cast it as the type is private in dio
+      final error = (caught as dynamic)?.data;
+      expect(error, isA<DioException>());
+      expect(
+        StreamChatNetworkError.fromDioException(error as DioException).errorCode,
+        code,
+      );
 
       verify(() => tokenManager.isStatic).called(1);
       verifyNoMoreInteractions(tokenManager);
     },
   );
+
+  test('`onError` rejects with the original error when refreshing the token fails', () async {
+    const path = 'test-request-path';
+    final options = RequestOptions(path: path);
+    const code = ChatErrorCode.tokenExpired;
+    final errorResponse = ErrorResponse()
+      ..code = code.code
+      ..message = code.message;
+    final response = Response(
+      requestOptions: options,
+      data: errorResponse.toJson(),
+    );
+    final err = DioException(requestOptions: options, response: response);
+    final handler = ErrorInterceptorHandler();
+
+    when(() => tokenManager.isStatic).thenReturn(false);
+    when(() => tokenManager.loadToken(refresh: true)).thenThrow(Exception('token provider is down'));
+
+    authInterceptor.onError(err, handler);
+
+    Object? caught;
+    try {
+      await handler.future.timeout(const Duration(seconds: 5));
+    } catch (e) {
+      caught = e;
+    }
+
+    // need to cast it as the type is private in dio
+    final error = (caught as dynamic)?.data;
+    expect(error, isA<DioException>());
+    expect(
+      StreamChatNetworkError.fromDioException(error as DioException).errorCode,
+      code,
+    );
+    verifyNever(() => client.fetch(options));
+  });
 
   test(
     '`onError` should reject with error if error is not a `tokenExpired error`',
@@ -213,13 +260,15 @@ void main() {
 
       authInterceptor.onError(err, handler);
 
+      Object? caught;
       try {
         await handler.future;
       } catch (e) {
-        // need to cast it as the type is private in dio
-        final error = (e as dynamic).data;
-        expect(error, isA<DioException>());
+        caught = e;
       }
+
+      // need to cast it as the type is private in dio
+      expect((caught as dynamic)?.data, isA<DioException>());
     },
   );
 }

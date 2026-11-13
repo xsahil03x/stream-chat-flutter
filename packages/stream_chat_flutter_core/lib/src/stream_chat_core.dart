@@ -6,7 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:stream_chat/stream_chat.dart';
-import 'package:stream_chat_flutter_core/src/typedef.dart';
+import 'stream_state_scope.dart';
+import 'typedef.dart';
 
 /// Widget used to provide information about the chat to the widget tree.
 /// This Widget is used to react to life cycle changes and system updates.
@@ -133,7 +134,7 @@ class StreamChatCore extends StatefulWidget {
   /// See also:
   ///  * [of], which throws if no [StreamChatCore] is found.
   static StreamChatCoreState? maybeOf(BuildContext context) {
-    return context.findAncestorStateOfType<StreamChatCoreState>();
+    return StreamStateScope.maybeOf<StreamChatCoreState>(context);
   }
 }
 
@@ -143,8 +144,7 @@ class StreamChatCore extends StatefulWidget {
 const _connectivityDebounceDuration = Duration(seconds: 3);
 
 /// State class associated with [StreamChatCore].
-class StreamChatCoreState extends State<StreamChatCore>
-    with WidgetsBindingObserver {
+class StreamChatCoreState extends State<StreamChatCore> with WidgetsBindingObserver {
   /// The current user
   User? get currentUser => client.state.currentUser;
 
@@ -174,15 +174,13 @@ class StreamChatCoreState extends State<StreamChatCore>
 
         case PlatformType.macOS:
           final info = await DeviceInfoPlugin().macOsInfo;
-          osVersion = [info.majorVersion, info.minorVersion, info.patchVersion]
-              .join('.');
+          osVersion = [info.majorVersion, info.minorVersion, info.patchVersion].join('.');
           deviceModel = info.model;
           break;
 
         case PlatformType.windows:
           final info = await DeviceInfoPlugin().windowsInfo;
-          osVersion = [info.majorVersion, info.minorVersion, info.buildNumber]
-              .join('.');
+          osVersion = [info.majorVersion, info.minorVersion, info.buildNumber].join('.');
           deviceModel = null;
           break;
 
@@ -294,7 +292,9 @@ class StreamChatCoreState extends State<StreamChatCore>
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return StreamStateScope(state: this, child: widget.child);
+  }
 }
 
 final class _ChatLifecycleManager {
@@ -328,6 +328,7 @@ final class _ChatLifecycleManager {
     _cancelBackgroundTimer();
     _cancelEventSubscription();
 
+    client.resumeReconnect();
     return client.maybeReconnect().ignore();
   }
 
@@ -337,6 +338,10 @@ final class _ChatLifecycleManager {
   void _onBackground() {
     _cancelBackgroundTimer();
     _cancelEventSubscription();
+
+    // Suspend automatic reconnection so that an OS-initiated socket close
+    // during the keep-alive window doesn't kick off a retry storm.
+    client.pauseReconnect();
 
     if (onBackgroundEvent case final handler?) {
       _eventSubscription = client.on().listen(handler);

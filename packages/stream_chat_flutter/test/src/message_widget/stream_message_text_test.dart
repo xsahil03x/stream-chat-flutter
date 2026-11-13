@@ -1,0 +1,309 @@
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:stream_chat_flutter/src/message_widget/components/stream_message_text.dart';
+import 'package:stream_chat_flutter/stream_chat_flutter.dart' hide StreamMessageText;
+import 'package:stream_core_flutter/chat.dart' as core;
+
+import '../mocks.dart';
+
+void main() {
+  late MockClient client;
+  late MockClientState clientState;
+
+  setUp(() {
+    client = MockClient();
+    clientState = MockClientState();
+    when(() => client.state).thenReturn(clientState);
+  });
+
+  tearDown(() {
+    CurrentPlatform.debugCurrentPlatformOverride = null;
+  });
+
+  Widget wrap(Widget child) {
+    return MaterialApp(
+      home: StreamChat(
+        client: client,
+        child: Scaffold(body: child),
+      ),
+    );
+  }
+
+  testWidgets('StreamMessageText renders message text', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    final message = Message(text: 'Hello world');
+
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+
+    expect(find.text('Hello world'), findsOneWidget);
+    expect(find.byType(core.StreamMessageText), findsOneWidget);
+  });
+
+  testWidgets('StreamMessageText is selectable on desktop and web', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    final message = Message(text: 'Hello world');
+
+    // Desktop
+    CurrentPlatform.debugCurrentPlatformOverride = PlatformType.macOS;
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+    expect(find.byType(SelectionArea), findsOneWidget);
+
+    // Web
+    CurrentPlatform.debugCurrentPlatformOverride = PlatformType.web;
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+    expect(find.byType(SelectionArea), findsOneWidget);
+  });
+
+  testWidgets('StreamMessageText keys the selection area to the browser context menu state', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    CurrentPlatform.debugCurrentPlatformOverride = PlatformType.macOS;
+
+    await tester.pumpWidget(wrap(StreamMessageText(message: Message(text: 'Hello world'))));
+    await tester.pump();
+
+    final selectionArea = tester.widget<SelectionArea>(find.byType(SelectionArea));
+    // The browser context menu is always enabled off web, so the key stays true.
+    expect(selectionArea.key, const ValueKey(true));
+  });
+
+  testWidgets('StreamMessageText is not selectable on mobile', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    final message = Message(text: 'Hello world');
+
+    // iOS
+    CurrentPlatform.debugCurrentPlatformOverride = PlatformType.ios;
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+    expect(find.byType(SelectionArea), findsNothing);
+
+    // Android
+    CurrentPlatform.debugCurrentPlatformOverride = PlatformType.android;
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+    expect(find.byType(SelectionArea), findsNothing);
+  });
+
+  testWidgets(
+    'StreamMessageText allows selecting text on desktop',
+    (tester) async {
+      addTearDown(() {
+        CurrentPlatform.debugCurrentPlatformOverride = null;
+      });
+
+      CurrentPlatform.debugCurrentPlatformOverride = PlatformType.macOS;
+
+      SelectedContent? content;
+
+      final user = OwnUser(id: 'test-user', language: 'en');
+      when(() => clientState.currentUser).thenReturn(user);
+      when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+      const text = '- Item 1\n- Item 2\n- Item 3';
+
+      await tester.pumpWidget(
+        wrap(
+          StreamMessageText(
+            message: Message(text: text),
+            onSelectionChanged: (selectedContent) {
+              content = selectedContent;
+            },
+          ),
+        ),
+      );
+
+      final target = find.byType(StreamMessageText);
+      expect(target, findsOneWidget);
+
+      final gesture = await tester.startGesture(
+        tester.getTopLeft(target),
+        kind: PointerDeviceKind.mouse,
+      );
+      addTearDown(gesture.removePointer);
+      await tester.pump();
+
+      await gesture.moveTo(tester.getBottomRight(target));
+      await gesture.up();
+      await tester.pump();
+
+      expect(content, isNotNull);
+      expect(content!.plainText, '•Item 1•Item 2•Item 3');
+    },
+  );
+
+  testWidgets('StreamMessageText renders translated message text', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'fr');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    final message = Message(
+      text: 'Hello world',
+      i18n: const {
+        'fr_text': 'Bonjour le monde',
+      },
+    );
+
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+
+    expect(find.text('Bonjour le monde'), findsOneWidget);
+  });
+
+  testWidgets('StreamMessageText renders empty when text is null or empty', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    await tester.pumpWidget(wrap(StreamMessageText(message: Message())));
+    await tester.pump();
+
+    expect(find.byType(core.StreamMessageText), findsNothing);
+  });
+
+  testWidgets('StreamMessageText replaces mentions', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    final mentionedUser = User(id: 'u1', name: 'Alice');
+    final message = Message(
+      text: 'Hello @u1',
+      mentionedUsers: [mentionedUser],
+    );
+
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+
+    // replaceMentions() should change "@u1" to "[@Alice](mention:u1)"
+    // core.StreamMessageText renders this as markdown.
+    expect(find.textContaining('Alice'), findsOneWidget);
+  });
+
+  testWidgets('StreamMessageText rebuilds when user language changes', (tester) async {
+    final userEn = OwnUser(id: 'test-user', language: 'en');
+    final userFr = OwnUser(id: 'test-user', language: 'fr');
+
+    final userStreamController = StreamController<OwnUser?>.broadcast()..add(userEn);
+
+    when(() => clientState.currentUser).thenReturn(userEn);
+    when(() => clientState.currentUserStream).thenAnswer((_) => userStreamController.stream);
+
+    final message = Message(
+      text: 'Hello world',
+      i18n: const {
+        'fr_text': 'Bonjour le monde',
+      },
+    );
+
+    await tester.pumpWidget(wrap(StreamMessageText(message: message)));
+    await tester.pump();
+
+    expect(find.text('Hello world'), findsOneWidget);
+
+    when(() => clientState.currentUser).thenReturn(userFr);
+    userStreamController.add(userFr);
+
+    // BetterStreamBuilder needs to process the stream event and trigger a rebuild.
+    // pumpAndSettle ensures all scheduled frames and microtasks are handled.
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bonjour le monde'), findsOneWidget);
+
+    await userStreamController.close();
+  });
+
+  testWidgets('StreamMessageText keeps its user subscription when it rebuilds', (tester) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    var listenCount = 0;
+    final userStreamController = StreamController<OwnUser?>.broadcast(onListen: () => listenCount += 1);
+    addTearDown(userStreamController.close);
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => userStreamController.stream);
+
+    await tester.pumpWidget(wrap(StreamMessageText(message: Message(text: 'Hello world'))));
+    await tester.pumpWidget(wrap(StreamMessageText(message: Message(text: 'Hello again'))));
+
+    expect(find.text('Hello again'), findsOneWidget);
+    expect(listenCount, 1);
+  });
+
+  // Renders [text] and returns the link opened by tapping [linkText], or
+  // null when the tap opens nothing.
+  Future<String?> tapLink(WidgetTester tester, String text, String linkText) async {
+    final user = OwnUser(id: 'test-user', language: 'en');
+    when(() => clientState.currentUser).thenReturn(user);
+    when(() => clientState.currentUserStream).thenAnswer((_) => Stream.value(user));
+
+    String? opened;
+    await tester.pumpWidget(
+      wrap(
+        StreamMessageText(
+          message: Message(text: text),
+          onLinkTap: (_, href, _) => opened = href,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tapOnText(find.textRange.ofSubstring(linkText));
+    return opened;
+  }
+
+  testWidgets('StreamMessageText opens a domain without a scheme over https', (tester) async {
+    expect(await tapLink(tester, 'Some link: youtube.com', 'youtube.com'), 'https://youtube.com');
+  });
+
+  testWidgets('StreamMessageText opens the path of a domain without a scheme', (tester) async {
+    expect(await tapLink(tester, 'Docs at getstream.io/chat', 'getstream.io/chat'), 'https://getstream.io/chat');
+  });
+
+  testWidgets('StreamMessageText leaves trailing punctuation out of a link', (tester) async {
+    expect(await tapLink(tester, 'Try youtube.com.', 'youtube.com'), 'https://youtube.com');
+  });
+
+  testWidgets('StreamMessageText leaves an unknown top-level domain as plain text', (tester) async {
+    expect(await tapLink(tester, 'Open config.json', 'config.json'), isNull);
+  });
+
+  testWidgets('StreamMessageText opens a www address over https', (tester) async {
+    expect(await tapLink(tester, 'See www.google.com', 'www.google.com'), 'https://www.google.com');
+  });
+
+  testWidgets('StreamMessageText links a whole address, not the domain at its end', (tester) async {
+    expect(await tapLink(tester, 'Broken http://stream_io.com', 'io.com'), 'http://stream_io.com');
+  });
+
+  testWidgets('StreamMessageText keeps the target of a domain in a link label', (tester) async {
+    expect(
+      await tapLink(tester, '[visit youtube.com](https://example.com)', 'youtube.com'),
+      'https://example.com',
+    );
+  });
+
+  testWidgets('StreamMessageText leaves the punctuation after a path out of a link', (tester) async {
+    expect(await tapLink(tester, 'Docs at getstream.io/chat.', 'getstream.io/chat'), 'https://getstream.io/chat');
+  });
+
+  testWidgets('StreamMessageText opens an email address as an email', (tester) async {
+    expect(await tapLink(tester, 'Mail anna.li@gmail.com', 'anna.li'), 'mailto:anna.li@gmail.com');
+  });
+}

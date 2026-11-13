@@ -1,7 +1,6 @@
 // ignore_for_file: avoid_redundant_argument_values
 
-import 'dart:ui';
-
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stream_chat_flutter/src/attachment/thumbnail/thumbnail_size_calculator.dart';
 
@@ -216,17 +215,28 @@ void main() {
         expect(result.height, closeTo(5.625, 0.01));
       });
 
-      test('handles very large target sizes', () {
+      test('caps a target larger than the original at the original', () {
         final result = ThumbnailSizeCalculator.calculate(
           originalSize: const Size(1920, 1080),
           targetSize: const Size(4000, 3000),
           pixelRatio: 1,
+          // A fit that would otherwise enlarge is capped just the same.
+          fit: BoxFit.contain,
         );
 
-        expect(result, isNotNull);
-        // Should still maintain aspect ratio for upscaling
-        expect(result!.width, closeTo(4000, 0.01));
-        expect(result.height, closeTo(2250, 0.01));
+        expect(result, const Size(1920, 1080));
+      });
+
+      test('caps at the original when the pixel ratio overshoots it', () {
+        // The photo fits its box, so the fit returns the photo's own
+        // dimensions and the pixel ratio would scale past them.
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1002, 1400),
+          targetSize: const Size(1200, 1600),
+          pixelRatio: 1.497,
+        );
+
+        expect(result, const Size(1002, 1400));
       });
 
       test('handles fractional pixel ratio', () {
@@ -255,17 +265,188 @@ void main() {
       });
 
       test('handles original size smaller than target', () {
-        // Small original image (100x100) being scaled up to 400x300
         final result = ThumbnailSizeCalculator.calculate(
           originalSize: const Size(100, 100),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.contain,
+        );
+
+        expect(result, const Size(100, 100));
+      });
+    });
+
+    group('with fit', () {
+      // 16:9 wider-than-target image used across most cases:
+      // originalSize 1920x1080, targetSize 400x300.
+
+      test('null defaults to BoxFit.scaleDown', () {
+        // Image (100x80) fits inside the box, so scaleDown returns
+        // original — divergent from contain (which would upscale).
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(100, 80),
           targetSize: const Size(400, 300),
           pixelRatio: 1,
         );
 
         expect(result, isNotNull);
-        // Should still maintain aspect ratio (1:1)
-        expect(result!.width, closeTo(300, 0.01));
+        expect(result!.width, closeTo(100, 0.01));
+        expect(result.height, closeTo(80, 0.01));
+      });
+
+      test('BoxFit.cover pins height when image is wider than box', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.cover,
+        );
+
+        expect(result, isNotNull);
+        // 300 * (1920/1080) = 533.33
+        expect(result!.width, closeTo(533.33, 0.01));
         expect(result.height, closeTo(300, 0.01));
+      });
+
+      test('BoxFit.cover pins width when image is taller than box', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1080, 1920),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.cover,
+        );
+
+        expect(result, isNotNull);
+        // 400 / (1080/1920) = 711.11
+        expect(result!.width, closeTo(400, 0.01));
+        expect(result.height, closeTo(711.11, 0.01));
+      });
+
+      test('BoxFit.fill returns the target size literally', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.fill,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.width, closeTo(400, 0.01));
+        expect(result.height, closeTo(300, 0.01));
+      });
+
+      test('BoxFit.fitWidth pins width and derives height from aspect', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.fitWidth,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.width, closeTo(400, 0.01));
+        expect(result.height, closeTo(225, 0.01));
+      });
+
+      test('BoxFit.fitHeight pins height and derives width from aspect', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.fitHeight,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.width, closeTo(533.33, 0.01));
+        expect(result.height, closeTo(300, 0.01));
+      });
+
+      test('BoxFit.none clamps overflowing original to target', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.none,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.width, closeTo(400, 0.01));
+        expect(result.height, closeTo(300, 0.01));
+      });
+
+      test('BoxFit.none keeps original when smaller than target', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(100, 80),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.none,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.width, closeTo(100, 0.01));
+        expect(result.height, closeTo(80, 0.01));
+      });
+
+      test('BoxFit.none caps only the axis that overflows', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 2000),
+          pixelRatio: 1,
+          fit: BoxFit.none,
+        );
+
+        expect(result, const Size(400, 1080));
+      });
+
+      test('BoxFit.fill caps only the axis that overflows', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 2000),
+          pixelRatio: 1,
+          fit: BoxFit.fill,
+        );
+
+        expect(result, const Size(400, 1080));
+      });
+
+      test('BoxFit.scaleDown matches contain when image overflows', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.scaleDown,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.width, closeTo(400, 0.01));
+        expect(result.height, closeTo(225, 0.01));
+      });
+
+      test('BoxFit.scaleDown keeps original when image fits inside', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(100, 80),
+          targetSize: const Size(400, 300),
+          pixelRatio: 1,
+          fit: BoxFit.scaleDown,
+        );
+
+        expect(result, isNotNull);
+        expect(result!.width, closeTo(100, 0.01));
+        expect(result.height, closeTo(80, 0.01));
+      });
+
+      test('applies pixel ratio after fit calculation', () {
+        final result = ThumbnailSizeCalculator.calculate(
+          originalSize: const Size(1920, 1080),
+          targetSize: const Size(400, 300),
+          pixelRatio: 2,
+          fit: BoxFit.cover,
+        );
+
+        expect(result, isNotNull);
+        // Cover at 1x = 533.33x300; at 2x = 1066.66x600.
+        expect(result!.width, closeTo(1066.66, 0.01));
+        expect(result.height, closeTo(600, 0.01));
       });
     });
   });

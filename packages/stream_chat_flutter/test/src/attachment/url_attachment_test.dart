@@ -14,20 +14,15 @@ void main() {
 
       when(() => channel.state).thenReturn(channelState);
 
-      final themeData = ThemeData();
-      final streamTheme = StreamChatThemeData.fromTheme(themeData);
-
       await tester.pumpWidget(
         MaterialApp(
           home: StreamChatTheme(
-            data: streamTheme,
+            data: StreamChatThemeData(),
             child: StreamChannel(
               channel: channel,
               child: SizedBox(
-                child: StreamUrlAttachment(
-                  messageTheme: streamTheme.ownMessageTheme,
+                child: StreamLinkPreviewAttachment(
                   message: Message(),
-                  hostDisplayName: 'Test',
                   urlAttachment: Attachment(
                     title: 'Flutter',
                     titleLink: 'https://flutter.dev',
@@ -43,6 +38,42 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Flutter'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Shows the scraped url when the attachment has no title link',
+    (WidgetTester tester) async {
+      final channel = MockChannel();
+      final channelState = MockChannelState();
+
+      when(() => channel.state).thenReturn(channelState);
+
+      const imageUrl = 'https://upload.wikimedia.org/flower.jpg';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StreamChatTheme(
+            data: StreamChatThemeData(),
+            child: StreamChannel(
+              channel: channel,
+              child: SizedBox(
+                child: StreamLinkPreviewAttachment(
+                  message: Message(),
+                  urlAttachment: Attachment(
+                    type: 'image',
+                    imageUrl: imageUrl,
+                    ogScrapeUrl: imageUrl,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text(imageUrl), findsOneWidget);
     },
   );
 }

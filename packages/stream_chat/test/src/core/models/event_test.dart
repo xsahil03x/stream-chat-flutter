@@ -45,6 +45,74 @@ void main() {
       expect(eventWithDraft.draft?.message.pollId, equals('poll-123'));
     });
 
+    test('should parse a sent scheduled message', () {
+      final event = Event.fromJson({
+        'type': EventType.scheduledMessageSent,
+        'cid': 'messaging:general',
+        'message_id': 'sent-message-id',
+        'scheduled_message': {
+          'id': 'scheduled-id',
+          'cid': 'messaging:general',
+          'user': {'id': 'alice'},
+          'message': {'text': 'Good morning'},
+          'scheduled_at': '2026-11-02T09:00:00.000Z',
+          'status': 'sent',
+          'created_at': '2026-10-29T10:00:00.000Z',
+          'updated_at': '2026-10-29T10:00:00.000Z',
+        },
+      });
+
+      expect(event.messageId, 'sent-message-id');
+      expect(event.scheduledMessage?.id, 'scheduled-id');
+      expect(event.scheduledMessage?.status, ScheduledMessageStatus.sent);
+    });
+
+    test('should not keep a scheduled message in extra data', () {
+      final event = Event.fromJson({
+        'type': EventType.scheduledMessageSent,
+        'cid': 'messaging:general',
+        'scheduled_message': {
+          'id': 'scheduled-id',
+          'cid': 'messaging:general',
+          'user': {'id': 'alice'},
+          'message': {'text': 'Good morning'},
+          'scheduled_at': '2026-11-02T09:00:00.000Z',
+          'status': 'sent',
+        },
+      });
+
+      expect(event.extraData, isNot(contains('scheduled_message')));
+    });
+
+    group('aiState', () {
+      AITypingState? parse(Object? aiState) => Event.fromJson({
+        'type': EventType.aiIndicatorUpdate,
+        'ai_state': ?aiState,
+      }).aiState;
+
+      test('should parse both spellings of the checking sources state', () {
+        expect(parse('AI_STATE_CHECKING_SOURCES'), AITypingState.checkingSources);
+        expect(parse('AI_STATE_EXTERNAL_SOURCES'), AITypingState.checkingSources);
+      });
+
+      test('should fall back to idle for an unknown state', () {
+        expect(parse('AI_STATE_SOMETHING_NEW'), AITypingState.idle);
+      });
+
+      test('should be null when the state is missing', () {
+        expect(parse(null), isNull);
+      });
+
+      test('should serialize checking sources with its canonical spelling', () {
+        final event = Event.fromJson({
+          'type': EventType.aiIndicatorUpdate,
+          'ai_state': 'AI_STATE_EXTERNAL_SOURCES',
+        });
+
+        expect(event.toJson()['ai_state'], 'AI_STATE_CHECKING_SOURCES');
+      });
+    });
+
     test('should serialize to json correctly', () {
       final event = Event(
         user: User(id: 'id'),
@@ -94,7 +162,7 @@ void main() {
             'total_unread_count': 0,
             'unread_channels': 0,
             'unread_threads': 0,
-            'blocked_user_ids': []
+            'blocked_user_ids': [],
           },
           'user': {'id': 'id', 'teams': [], 'online': false, 'banned': false},
           'total_unread_count': 1,
@@ -121,7 +189,7 @@ void main() {
               'mentioned_users': [],
               'silent': false,
             },
-          }
+          },
         },
       );
 

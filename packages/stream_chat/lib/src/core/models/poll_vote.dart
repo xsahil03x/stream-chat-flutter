@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:json_annotation/json_annotation.dart';
-import 'package:stream_chat/src/core/models/comparable_field.dart';
-import 'package:stream_chat/src/core/models/user.dart';
+import 'comparable_field.dart';
+import 'user.dart';
 
 part 'poll_vote.g.dart';
 
@@ -16,21 +16,21 @@ class PollVote extends Equatable implements ComparableFieldProvider {
     this.pollId,
     this.optionId,
     this.answerText,
+    this.answerTextI18n,
     DateTime? createdAt,
     DateTime? updatedAt,
     this.userId,
     this.user,
-  })  : assert(
-          optionId != null || answerText != null,
-          'Either optionId or answerText must be provided',
-        ),
-        isAnswer = answerText != null,
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : assert(
+         optionId != null || answerText != null,
+         'Either optionId or answerText must be provided',
+       ),
+       isAnswer = answerText != null,
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   /// Create a new instance from a json
-  factory PollVote.fromJson(Map<String, dynamic> json) =>
-      _$PollVoteFromJson(json);
+  factory PollVote.fromJson(Map<String, dynamic> json) => _$PollVoteFromJson(json);
 
   /// The unique identifier of the poll vote.
   @JsonKey(includeIfNull: false)
@@ -43,6 +43,14 @@ class PollVote extends Equatable implements ComparableFieldProvider {
   /// The text of the answer provided in the poll.
   @JsonKey(includeIfNull: false)
   final String? answerText;
+
+  /// The translations of [answerText], keyed as `<language>_text`, plus the
+  /// `language` [answerText] was written in.
+  ///
+  /// Filled in by the server when the answer is added to a poll in a channel
+  /// with automatic translation enabled.
+  @JsonKey(includeToJson: false)
+  final Map<String, String>? answerTextI18n;
 
   /// If true, the vote is an answer.
   @JsonKey(includeToJson: false)
@@ -77,34 +85,36 @@ class PollVote extends Equatable implements ComparableFieldProvider {
     String? pollId,
     String? optionId,
     String? answerText,
+    Map<String, String>? answerTextI18n,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? userId,
     User? user,
-  }) =>
-      PollVote(
-        id: id ?? this.id,
-        pollId: pollId ?? this.pollId,
-        optionId: optionId ?? this.optionId,
-        answerText: answerText ?? this.answerText,
-        createdAt: createdAt ?? this.createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-        userId: userId ?? this.userId,
-        user: user ?? this.user,
-      );
+  }) => PollVote(
+    id: id ?? this.id,
+    pollId: pollId ?? this.pollId,
+    optionId: optionId ?? this.optionId,
+    answerText: answerText ?? this.answerText,
+    answerTextI18n: answerTextI18n ?? this.answerTextI18n,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    userId: userId ?? this.userId,
+    user: user ?? this.user,
+  );
 
   @override
   List<Object?> get props => [
-        id,
-        pollId,
-        optionId,
-        isAnswer,
-        answerText,
-        createdAt,
-        updatedAt,
-        userId,
-        user,
-      ];
+    id,
+    pollId,
+    optionId,
+    isAnswer,
+    answerText,
+    answerTextI18n,
+    createdAt,
+    updatedAt,
+    userId,
+    user,
+  ];
 
   @override
   ComparableField? getComparableField(String sortKey) {

@@ -1,12 +1,14 @@
 import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
 import 'package:json_annotation/json_annotation.dart';
-import 'package:stream_chat/src/core/models/comparable_field.dart';
-import 'package:stream_chat/src/core/models/poll_option.dart';
-import 'package:stream_chat/src/core/models/poll_vote.dart';
-import 'package:stream_chat/src/core/models/user.dart';
-import 'package:stream_chat/src/core/util/serializer.dart';
+import 'package:meta/meta.dart';
 import 'package:uuid/uuid.dart';
+
+import '../util/serializer.dart';
+import 'comparable_field.dart';
+import 'poll_option.dart';
+import 'poll_vote.dart';
+import 'user.dart';
 
 part 'poll.g.dart';
 
@@ -38,7 +40,9 @@ class Poll extends Equatable implements ComparableFieldProvider {
   Poll({
     String? id,
     required this.name,
+    this.nameI18n,
     this.description,
+    this.descriptionI18n,
     required this.options,
     this.votingVisibility = VotingVisibility.public,
     this.enforceUniqueVote = true,
@@ -57,9 +61,9 @@ class Poll extends Equatable implements ComparableFieldProvider {
     this.createdBy,
     this.ownVotesAndAnswers = const [],
     this.extraData = const {},
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   /// Create a new instance from a json
   factory Poll.fromJson(Map<String, dynamic> json) =>
@@ -71,8 +75,20 @@ class Poll extends Equatable implements ComparableFieldProvider {
   /// The name of the poll.
   final String name;
 
+  /// The translations of [name], keyed as `<language>_text`, plus the
+  /// `language` [name] was written in.
+  ///
+  /// Filled in by the server when the poll is sent to a channel with
+  /// automatic translation enabled.
+  @JsonKey(includeToJson: false)
+  final Map<String, String>? nameI18n;
+
   /// The description of the poll.
   final String? description;
+
+  /// The translations of [description], in the same shape as [nameI18n].
+  @JsonKey(includeToJson: false)
+  final Map<String, String>? descriptionI18n;
 
   /// The list of options available for the poll.
   final List<PollOption> options;
@@ -167,14 +183,15 @@ class Poll extends Equatable implements ComparableFieldProvider {
   final Map<String, Object?> extraData;
 
   /// Serialize to json
-  Map<String, dynamic> toJson() =>
-      Serializer.moveFromExtraDataToRoot(_$PollToJson(this));
+  Map<String, dynamic> toJson() => Serializer.moveFromExtraDataToRoot(_$PollToJson(this));
 
   /// Creates a copy of [Poll] with specified attributes overridden.
   Poll copyWith({
     String? id,
     String? name,
+    Map<String, String>? nameI18n,
     String? description,
+    Map<String, String>? descriptionI18n,
     List<PollOption>? options,
     VotingVisibility? votingVisibility,
     bool? enforceUniqueVote,
@@ -193,33 +210,58 @@ class Poll extends Equatable implements ComparableFieldProvider {
     DateTime? createdAt,
     DateTime? updatedAt,
     Map<String, Object?>? extraData,
-  }) =>
-      Poll(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        description: description ?? this.description,
-        options: options ?? this.options,
-        votingVisibility: votingVisibility ?? this.votingVisibility,
-        enforceUniqueVote: enforceUniqueVote ?? this.enforceUniqueVote,
-        maxVotesAllowed: maxVotesAllowed == _nullConst
-            ? this.maxVotesAllowed
-            : maxVotesAllowed as int?,
-        allowUserSuggestedOptions:
-            allowUserSuggestedOptions ?? this.allowUserSuggestedOptions,
-        allowAnswers: allowAnswers ?? this.allowAnswers,
-        isClosed: isClosed ?? this.isClosed,
-        voteCountsByOption: voteCountsByOption ?? this.voteCountsByOption,
-        ownVotesAndAnswers: ownVotesAndAnswers ?? this.ownVotesAndAnswers,
-        voteCount: voteCount ?? this.voteCount,
-        answersCount: answersCount ?? this.answersCount,
-        latestVotesByOption: latestVotesByOption ?? this.latestVotesByOption,
-        latestAnswers: latestAnswers ?? this.latestAnswers,
-        createdById: createdById ?? this.createdById,
-        createdBy: createdBy ?? this.createdBy,
-        createdAt: createdAt ?? this.createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-        extraData: extraData ?? this.extraData,
-      );
+  }) => Poll(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    nameI18n: nameI18n ?? this.nameI18n,
+    description: description ?? this.description,
+    descriptionI18n: descriptionI18n ?? this.descriptionI18n,
+    options: options ?? this.options,
+    votingVisibility: votingVisibility ?? this.votingVisibility,
+    enforceUniqueVote: enforceUniqueVote ?? this.enforceUniqueVote,
+    maxVotesAllowed: maxVotesAllowed == _nullConst ? this.maxVotesAllowed : maxVotesAllowed as int?,
+    allowUserSuggestedOptions: allowUserSuggestedOptions ?? this.allowUserSuggestedOptions,
+    allowAnswers: allowAnswers ?? this.allowAnswers,
+    isClosed: isClosed ?? this.isClosed,
+    voteCountsByOption: voteCountsByOption ?? this.voteCountsByOption,
+    ownVotesAndAnswers: ownVotesAndAnswers ?? this.ownVotesAndAnswers,
+    voteCount: voteCount ?? this.voteCount,
+    answersCount: answersCount ?? this.answersCount,
+    latestVotesByOption: latestVotesByOption ?? this.latestVotesByOption,
+    latestAnswers: latestAnswers ?? this.latestAnswers,
+    createdById: createdById ?? this.createdById,
+    createdBy: createdBy ?? this.createdBy,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    extraData: extraData ?? this.extraData,
+  );
+
+  /// This poll with the translations of [oldPoll] filled in where this one
+  /// has none.
+  ///
+  /// A translation is kept only for unchanged text, so a renamed poll or
+  /// option never carries the translation of its old text. Returns this poll
+  /// as is when [oldPoll] is `null` or a different poll.
+  @internal
+  Poll withTranslationsOf(Poll? oldPoll) {
+    if (oldPoll == null || oldPoll.id != id) return this;
+
+    final oldOptions = {for (final option in oldPoll.options) option.id: option};
+
+    return copyWith(
+      nameI18n: nameI18n ?? (name == oldPoll.name ? oldPoll.nameI18n : null),
+      descriptionI18n: descriptionI18n ?? (description == oldPoll.description ? oldPoll.descriptionI18n : null),
+      options: [
+        for (final option in options)
+          switch (oldOptions[option.id]) {
+            final old? when option.textI18n == null && option.text == old.text => option.copyWith(
+              textI18n: old.textI18n,
+            ),
+            _ => option,
+          },
+      ],
+    );
+  }
 
   /// Known top level fields.
   ///
@@ -227,7 +269,9 @@ class Poll extends Equatable implements ComparableFieldProvider {
   static const topLevelFields = [
     'id',
     'name',
+    'name_i18n',
     'description',
+    'description_i18n',
     'options',
     'voting_visibility',
     'enforce_unique_vote',
@@ -250,27 +294,29 @@ class Poll extends Equatable implements ComparableFieldProvider {
 
   @override
   List<Object?> get props => [
-        id,
-        name,
-        description,
-        options,
-        votingVisibility,
-        enforceUniqueVote,
-        maxVotesAllowed,
-        allowUserSuggestedOptions,
-        allowAnswers,
-        isClosed,
-        voteCountsByOption,
-        ownVotesAndAnswers,
-        voteCount,
-        answersCount,
-        latestVotesByOption,
-        latestAnswers,
-        createdById,
-        createdBy,
-        createdAt,
-        updatedAt,
-      ];
+    id,
+    name,
+    nameI18n,
+    description,
+    descriptionI18n,
+    options,
+    votingVisibility,
+    enforceUniqueVote,
+    maxVotesAllowed,
+    allowUserSuggestedOptions,
+    allowAnswers,
+    isClosed,
+    voteCountsByOption,
+    ownVotesAndAnswers,
+    voteCount,
+    answersCount,
+    latestVotesByOption,
+    latestAnswers,
+    createdById,
+    createdBy,
+    createdAt,
+    updatedAt,
+  ];
 
   @override
   ComparableField? getComparableField(String sortKey) {
@@ -319,31 +365,28 @@ extension PollX on Poll {
 
   /// Whether the poll is already closed and the provided option is the one,
   /// and **the only one** with the most votes.
-  bool isOptionWinner(PollOption option) =>
-      isClosed && isOptionWithMostVotes(option);
+  bool isOptionWinner(PollOption option) => isClosed && isOptionWithMostVotes(option);
 
   /// Whether the poll is already closed and the provided option is one of that
   /// has the most votes.
-  bool isOptionOneOfTheWinners(PollOption option) =>
-      isClosed && isOptionWithMaximumVotes(option);
+  bool isOptionOneOfTheWinners(PollOption option) => isClosed && isOptionWithMaximumVotes(option);
 
   /// Whether the provided option is the one, and **the only one** with the most
   /// votes.
   bool isOptionWithMostVotes(PollOption option) {
     final optionsWithMostVotes = {
       for (final entry in voteCountsByOption.entries)
-        if (entry.value == currentMaximumVoteCount) entry.key: entry.value
+        if (entry.value == currentMaximumVoteCount) entry.key: entry.value,
     };
 
-    return optionsWithMostVotes.length == 1 &&
-        optionsWithMostVotes[option.id] != null;
+    return optionsWithMostVotes.length == 1 && optionsWithMostVotes[option.id] != null;
   }
 
   /// Whether the provided option is one of that has the most votes.
   bool isOptionWithMaximumVotes(PollOption option) {
     final optionsWithMostVotes = {
       for (final entry in voteCountsByOption.entries)
-        if (entry.value == currentMaximumVoteCount) entry.key: entry.value
+        if (entry.value == currentMaximumVoteCount) entry.key: entry.value,
     };
 
     return optionsWithMostVotes[option.id] != null;
@@ -368,6 +411,5 @@ extension PollX on Poll {
 
   /// Returns a Boolean value indicating whether the current user has voted the
   /// given option.
-  bool hasCurrentUserVotedFor(PollOption option) =>
-      ownVotesAndAnswers.any((it) => it.optionId == option.id);
+  bool hasCurrentUserVotedFor(PollOption option) => ownVotesAndAnswers.any((it) => it.optionId == option.id);
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:mocktail/mocktail.dart';
+import 'package:stream_chat/src/core/http/token.dart';
 import 'package:stream_chat/src/core/http/token_manager.dart';
 import 'package:stream_chat/src/ws/websocket.dart';
 import 'package:stream_chat/stream_chat.dart';
@@ -24,8 +25,7 @@ void main() {
     WebSocketChannel channelProvider(
       Uri uri, {
       Iterable<String>? protocols,
-    }) =>
-        webSocketChannel;
+    }) => webSocketChannel;
 
     webSocket = WebSocket(
       apiKey: 'api-key',
@@ -36,10 +36,14 @@ void main() {
 
     webSocketSink = MockWebSocketSink();
     when(() => webSocketChannel.sink).thenReturn(webSocketSink);
+    when(() => webSocketChannel.ready).thenAnswer((_) async {});
 
     var webSocketController = StreamController<String>.broadcast();
     when(() => webSocketChannel.stream).thenAnswer(
       (_) => webSocketController.stream,
+    );
+    when(() => webSocketSink.done).thenAnswer(
+      (_) => Completer<void>().future,
     );
     when(() => webSocketSink.add(any())).thenAnswer((invocation) {
       webSocketController.add(invocation.positionalArguments.first);
@@ -89,6 +93,36 @@ void main() {
     expect(event.connectionId, connectionId);
     expect(event.me, isNotNull);
     expect(event.me!.id, user.id);
+
+    addTearDown(timer.cancel);
+  });
+
+  test('`connect` does not orphan the channel `ready` error', () async {
+    // A failed connect completes `ready` with an error on top of the error it
+    // delivers on the stream. Left unlistened, that duplicate is reported to
+    // the zone as an unhandled error. https://github.com/GetStream/stream-chat-flutter/issues/2921
+    when(() => webSocketChannel.ready).thenAnswer(
+      (_) => Future<void>.error(WebSocketChannelException('connect failed')),
+    );
+
+    final user = OwnUser(id: 'test-user');
+    const connectionId = 'test-connection-id';
+    // Sends connect event to web-socket stream
+    final timer = Timer(const Duration(milliseconds: 300), () {
+      final event = Event(
+        type: EventType.healthCheck,
+        connectionId: connectionId,
+        me: user,
+      );
+      webSocketSink.add(json.encode(event));
+    });
+
+    await webSocket.connect(user);
+
+    verify(() => webSocketChannel.ready).called(1);
+    // Guards against `ready` being read but its error dropped: the orphan would
+    // surface here and fail the test.
+    await pumpEventQueue();
 
     addTearDown(timer.cancel);
   });
@@ -167,13 +201,14 @@ void main() {
 
   test('`connect` should throw if already in connection attempt', () async {
     final user = OwnUser(id: 'test-user');
-    webSocket.connect(user);
-    try {
-      // calling again before previous attempt finishes
-      await webSocket.connect(user);
-    } catch (e) {
-      expect(e, isA<StreamWebSocketError>());
-    }
+    unawaited(webSocket.connect(user));
+
+    // calling again before previous attempt finishes. The guard throws
+    // synchronously, so the call has to stay inside a closure.
+    expect(
+      () => webSocket.connect(user),
+      throwsA(isA<StreamWebSocketError>()),
+    );
   });
 
   test('`connect` should throw if `onMessage` contains error', () async {
@@ -195,14 +230,14 @@ void main() {
       ]),
     );
 
-    try {
-      await webSocket.connect(user);
-    } catch (e) {
-      expect(e, isA<StreamWebSocketError>());
-      final err = e as StreamWebSocketError;
-      expect(err.code, error.code);
-      expect(err.message, error.message);
-    }
+    await expectLater(
+      webSocket.connect(user),
+      throwsA(
+        isA<StreamWebSocketError>()
+            .having((it) => it.code, 'code', error.code)
+            .having((it) => it.message, 'message', error.message),
+      ),
+    );
 
     addTearDown(timer.cancel);
   });
@@ -380,6 +415,210 @@ void main() {
       addTearDown(timer.cancel);
     },
   );
+
+  test(
+    'should not `reconnect` after connection closes while reconnect is paused',
+    () async {
+      // Construct with a short health-check interval so we can pump past it
+      // within the test and assert no health-check writes happen on the
+      // closed sink.
+      final pausedWebSocket = WebSocket(
+        apiKey: 'api-key',
+        baseUrl: 'ws://<local-ip>:8800',
+        tokenManager: tokenManager,
+        webSocketChannelProvider: (_, {protocols}) => webSocketChannel,
+        healthCheckInterval: 1,
+        reconnectionMonitorInterval: 1,
+      );
+      addTearDown(pausedWebSocket.disconnect);
+
+      final user = OwnUser(id: 'test-user');
+      const connectionId = 'test-connection-id';
+      // Sends connect event to web-socket stream
+      final timer = Timer(const Duration(milliseconds: 300), () {
+        final event = Event(
+          type: EventType.healthCheck,
+          connectionId: connectionId,
+          me: user,
+        );
+        webSocketSink.add(json.encode(event));
+      });
+
+      final statuses = <ConnectionStatus>[];
+      final sub = pausedWebSocket.connectionStatusStream.listen(statuses.add);
+
+      await pausedWebSocket.connect(user);
+      expect(pausedWebSocket.reconnectEnabled, isTrue);
+
+      pausedWebSocket.pauseReconnect();
+      expect(pausedWebSocket.reconnectEnabled, isFalse);
+
+      // Mark all writes-so-far as verified so the next assertion only sees
+      // calls made after the close.
+      verify(() => webSocketSink.add(any()));
+
+      // Simulate an OS-initiated socket close.
+      webSocketSink.close();
+
+      // Pump well past the health-check interval to prove its timer was
+      // cancelled and no further writes are attempted on the dead channel.
+      await Future.delayed(const Duration(seconds: 3));
+
+      // Status should settle to disconnected after the paused close, with no
+      // `connecting` flicker from a retry attempt.
+      expect(statuses, [
+        ConnectionStatus.disconnected,
+        ConnectionStatus.connecting,
+        ConnectionStatus.connected,
+        ConnectionStatus.disconnected,
+      ]);
+      // No additional sink writes after the close.
+      verifyNever(() => webSocketSink.add(any()));
+
+      addTearDown(() {
+        timer.cancel();
+        sub.cancel();
+      });
+    },
+  );
+
+  test(
+    'should `reconnect` again after `resumeReconnect`',
+    () async {
+      final user = OwnUser(id: 'test-user');
+      const connectionId = 'test-connection-id';
+      final timer = Timer(const Duration(milliseconds: 300), () {
+        final event = Event(
+          type: EventType.healthCheck,
+          connectionId: connectionId,
+          me: user,
+        );
+        webSocketSink.add(json.encode(event));
+      });
+
+      await webSocket.connect(user);
+
+      webSocket.pauseReconnect();
+      expect(webSocket.reconnectEnabled, isFalse);
+
+      webSocket.resumeReconnect();
+      expect(webSocket.reconnectEnabled, isTrue);
+
+      addTearDown(timer.cancel);
+    },
+  );
+
+  test('a token provider that fails during a refresh does not stall reconnecting', () async {
+    final user = OwnUser(id: 'test-user');
+
+    var providerCalls = 0;
+    final providerTokenManager = TokenManager();
+    await providerTokenManager.setTokenOrProvider(
+      user.id,
+      provider: (userId) async {
+        providerCalls += 1;
+        // The refresh after the token expires fails.
+        if (providerCalls == 2) throw Exception('token provider is down');
+        return Token.development(userId).rawValue;
+      },
+    );
+
+    var channelsOpened = 0;
+    final providerWebSocket = WebSocket(
+      apiKey: 'api-key',
+      baseUrl: 'ws://<local-ip>:8800',
+      tokenManager: providerTokenManager,
+      webSocketChannelProvider: (_, {protocols}) {
+        channelsOpened += 1;
+        return webSocketChannel;
+      },
+    );
+    addTearDown(providerWebSocket.disconnect);
+
+    final timer = Timer(const Duration(milliseconds: 300), () {
+      final event = Event(type: EventType.healthCheck, connectionId: 'connection-id', me: user);
+      webSocketSink.add(json.encode(event));
+    });
+    addTearDown(timer.cancel);
+
+    await providerWebSocket.connect(user);
+    expect(channelsOpened, 1);
+
+    final tokenExpired = ErrorResponse()
+      ..code = ChatErrorCode.tokenExpired.code
+      ..message = 'Token expired';
+    webSocketSink.add(json.encode({'error': tokenExpired}));
+
+    // The failed refresh still leads to another connection attempt, which
+    // fetches a new token instead of reusing the expired one.
+    await Future.doWhile(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      return channelsOpened < 2;
+    }).timeout(const Duration(seconds: 15));
+
+    expect(providerCalls, 3);
+  });
+
+  for (final refreshFails in [true, false]) {
+    final outcome = refreshFails ? 'fails' : 'succeeds';
+    test('a token refresh that $outcome after `disconnect` does not reconnect', () async {
+      final user = OwnUser(id: 'test-user');
+
+      final refresh = Completer<String>();
+      var providerCalls = 0;
+      var channelsOpened = 0;
+      final providerTokenManager = TokenManager();
+      await providerTokenManager.setTokenOrProvider(
+        user.id,
+        provider: (userId) async {
+          providerCalls += 1;
+          if (providerCalls == 2) return refresh.future;
+          return Token.development(userId).rawValue;
+        },
+      );
+
+      final providerWebSocket = WebSocket(
+        apiKey: 'api-key',
+        baseUrl: 'ws://<local-ip>:8800',
+        tokenManager: providerTokenManager,
+        webSocketChannelProvider: (_, {protocols}) {
+          channelsOpened += 1;
+          return webSocketChannel;
+        },
+      );
+      addTearDown(providerWebSocket.disconnect);
+
+      final timer = Timer(const Duration(milliseconds: 300), () {
+        final event = Event(type: EventType.healthCheck, connectionId: 'connection-id', me: user);
+        webSocketSink.add(json.encode(event));
+      });
+      addTearDown(timer.cancel);
+
+      await providerWebSocket.connect(user);
+
+      final tokenExpired = ErrorResponse()
+        ..code = ChatErrorCode.tokenExpired.code
+        ..message = 'Token expired';
+      webSocketSink.add(json.encode({'error': tokenExpired}));
+
+      // Wait for the reconnect to start refreshing the token.
+      await Future.doWhile(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        return providerCalls < 2;
+      }).timeout(const Duration(seconds: 15));
+
+      providerWebSocket.disconnect();
+      if (refreshFails) {
+        refresh.completeError(Exception('token provider is down'));
+      } else {
+        refresh.complete(Token.development(user.id).rawValue);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(providerWebSocket.connectionStatus, ConnectionStatus.disconnected);
+      expect(channelsOpened, 1);
+    });
+  }
 
   test('`disconnect` successfully disconnects the current user', () async {
     final user = OwnUser(id: 'test-user');
